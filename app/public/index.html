@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>陪伴 · 一点一滴，一起向前</title><link rel="icon" href="/icon.svg"><link rel="stylesheet" href="/style.css?v=0.4.0"><link rel="stylesheet" href="/workshop.css?v=0.4.0"><script src="/app.js?v=0.4.0" type="module"></script></head>
+<body><div class="wallpaper" aria-hidden="true"></div>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="陪伴首页"><img src="/icon.svg" alt=""><span>陪伴<small>一点一滴，一起向前</small></span></a>
+  <div class="nav-label">我的空间</div>
+  <nav aria-label="主导航">
+    <button class="nav-item active" data-view="chat"><span>◌</span> <b id="nav-chat-label">和知夏聊聊</b> <i>01</i></button>
+    <button class="nav-item" data-view="plans"><span>▤</span> 学习计划 <i>02</i></button>
+    <button class="nav-item" data-view="records"><span>▥</span> 陪伴记录 <i>03</i></button>
+    <button class="nav-item" data-view="character"><span>✧</span> 角色工坊 <i>04</i></button>
+    <button class="nav-item" data-view="appearance"><span>◐</span> 外观装扮 <i>05</i></button>
+  </nav>
+  <div class="sidebar-note"><span class="sprout">✳</span><p>不用一下子很厉害。<br>今天，先向前一点点。</p><small>慢慢来，也是在前进。</small></div>
+  <button id="settings-open" class="settings-button"><span>⚙</span> 偏好设置 <span>↗</span></button>
+  <div class="privacy"><span class="dot"></span> 你的记录，只留在本机</div>
+</aside>
+<main>
+  <header class="topbar"><div><span class="eyebrow">YOUR LITTLE CORNER</span><p>给努力的你，留一个温暖的角落。</p></div><div class="top-right"><span id="date-label"></span><button id="connection" class="connection"><span class="dot"></span><span id="connection-label">连接中</span></button></div></header>
+  <div id="notice" class="notice" role="status" hidden></div>
+  <section id="view-chat" class="view">
+    <section class="welcome"><div><div class="welcome-tag">陪伴你的每一个小小进步</div><h1 id="greeting">今天，也一起慢慢来。</h1><p>把脑袋里的小事放下来，我们一件一件完成。</p><div class="welcome-foot"><span class="sun">☀</span> 不必完美，开始就很好。</div></div><div class="plant" aria-hidden="true"><div class="plant-halo"></div><div class="stem"></div><div class="leaf leaf-one"></div><div class="leaf leaf-two"></div><div class="leaf leaf-three"></div><div class="pot"></div><span class="plant-star star-one">✧</span><span class="plant-star star-two">✧</span><div class="plant-ground"></div></div></section>
+    <div class="workspace-grid">
+      <section class="chat-panel panel"><div class="panel-heading"><div id="header-avatar" class="companion-avatar">知</div><div><h2><b id="companion-name">知夏</b> <span class="role-tag">你的学习伙伴</span></h2><p id="companion-subtitle">认真听你说，也陪你一起做。</p></div><button class="text-button chat-decoration" data-view="character" aria-label="编辑陪伴角色">✧</button></div>
+        <div id="messages" class="messages" aria-live="polite" aria-label="聊天记录"></div>
+        <div id="chat-error" class="chat-error" role="alert" hidden><span></span><button id="retry-chat">重试</button></div>
+        <div class="composer-area"><div class="quick-prompts"><button data-prompt="今天心里有点乱，我想先聊聊。请先听我说，不急着给建议。">聊聊心情</button><button data-prompt="今天有点不想学，陪我找一个五分钟能开始的小步骤吧。">有点不想学</button><button data-prompt="帮我一起安排今天的学习吧，一次问我一个问题。">安排今天</button><button data-prompt="我们一起复盘一下今天吧。">今日小复盘</button></div><form id="chat-form"><label for="chat-input" class="sr-only">给陪伴角色的消息</label><textarea id="chat-input" rows="2" maxlength="4000" placeholder="想说什么都可以，知夏在听…"></textarea><div class="composer-bottom"><small>Enter 发送 · Shift + Enter 换行</small><button id="send" class="send" type="submit" aria-label="发送消息">↑</button><button id="stop" class="secondary" type="button" hidden>停止</button></div></form><p class="ai-note">陪伴角色是 AI 伙伴，回复可能有误。重要的事，我们一起认真核实。</p></div>
+      </section>
+      <aside class="right-column"><section class="panel today-panel"><div class="section-heading"><h2>今天的小目标</h2><button class="text-button" data-view="plans">全部 ↗</button></div><div class="progress-info"><span id="today-count">已完成 0 / 0</span><span id="today-percent">0%</span></div><progress id="today-progress" max="100" value="0"></progress><div id="today-tasks" class="task-list"></div><form id="quick-task-form" class="quick-task"><label class="sr-only" for="quick-task">添加今日目标</label><input id="quick-task" maxlength="200" placeholder="添一件小事…" required><button type="submit" aria-label="添加今日目标">＋</button></form></section>
+      <section class="focus-card"><div class="section-heading"><h2>留一段专注时间</h2><span>◷</span></div><p>先把眼前这一件事做好。</p><div id="timer-display" class="timer-display">25<span>:</span>00</div><div class="timer-options" aria-label="专注时长"><button data-minutes="5">5 分钟</button><button class="selected" data-minutes="25">25 分钟</button><button data-minutes="50">50 分钟</button></div><button id="timer-toggle" class="primary wide">开始专注 <span>▷</span></button><small id="timer-hint">页面打开时，到点会在这里提醒你</small></section>
+      <section class="little-note"><span>“</span><p>你走过的每一小步，<br>都算数。</p><small>给今天的你</small></section></aside>
+    </div>
+  </section>
+  <section id="view-plans" class="view" hidden><div class="page-title"><span class="eyebrow">ONE SMALL STEP</span><h1>把日子，拆成小小的进步。</h1><p>选好今天最重要的事，给自己留一点余地。</p></div><div class="stats" id="plan-stats"></div><section class="panel content-panel"><div class="section-heading"><h2>我的学习计划</h2><label class="date-control">查看日期 <input id="plan-date" type="date" required></label></div><form id="plan-form" class="add-form"><input id="plan-title" aria-label="学习任务" placeholder="比如：读完第二章的前 3 页" maxlength="200" required><button class="primary" type="submit">＋ 添加计划</button></form><div id="plan-tasks" class="task-list large"></div></section></section>
+  <section id="view-records" class="view" hidden><div class="page-title"><span class="eyebrow">LITTLE THINGS MATTER</span><h1>每一点成长，都值得记住。</h1><p>记下做到了什么，也记下普通日子里的小小感受。</p></div><div class="stats" id="record-stats"></div><div class="records-grid"><section class="panel content-panel"><h2>给今天留句话</h2><form id="note-form"><textarea id="note-input" aria-label="今日记录" placeholder="今天做到了什么？有什么想留给明天的自己？" maxlength="5000" required></textarea><button class="primary" type="submit">保存这一刻 ↗</button></form></section><section class="panel content-panel"><div class="section-heading"><h2>一路走来的小片段</h2><button id="export" class="text-button">导出备份 ↓</button></div><div id="record-list"></div></section></div></section>
+  <section id="view-character" class="view" hidden>
+    <div class="page-title"><span class="eyebrow">YOUR KIND OF COMPANY</span><h1>陪伴，可以是你喜欢的样子。</h1><p>性格、语气和相处节奏，由你来定义。保存后从下一条消息生效。</p></div>
+    <p id="startup-status" class="notice" role="status">正在加载角色设置…如果长时间没有变化，请刷新页面。</p><div id="character-presets" class="character-presets" aria-label="角色模板"></div>
+    <div class="character-layout">
+      <section class="panel content-panel">
+        <form id="character-form">
+          <div class="section-heading"><h2>我的角色包</h2><span id="character-dirty" class="muted">已保存的角色</span></div>
+          <div class="field-grid"><div><label for="char-name">角色名字</label><input id="char-name" maxlength="40" required></div><div><label for="char-identity">角色身份</label><input id="char-identity" maxlength="200" required placeholder="例如：温柔学姐、活力搭子、安静树洞"></div></div>
+          <label for="char-personality">性格</label><textarea id="char-personality" rows="3" maxlength="1200" placeholder="例如：耐心细腻，有主见，尊重我的节奏"></textarea>
+          <label for="char-tone">说话语气</label><textarea id="char-tone" rows="2" maxlength="800" placeholder="例如：温柔口语，偶尔开玩笑，不说教"></textarea>
+          <div class="field-grid three"><div><label for="char-mode">陪伴方式</label><select id="char-mode"><option value="balanced">倾听与学习兼顾</option><option value="listen">倾听优先</option><option value="study">学习督促优先</option></select></div><div><label for="char-replyLength">回复长度</label><select id="char-replyLength"><option value="short">简短 · 1–3 句</option><option value="medium">适中 · 3–6 句</option><option value="detailed">需要时详细展开</option></select></div><div><label for="char-emoji">表情习惯</label><select id="char-emoji"><option value="none">不用表情</option><option value="occasional">偶尔一个</option><option value="expressive">自然活泼</option></select></div></div>
+          <label for="char-greeting">开场白</label><textarea id="char-greeting" rows="3" maxlength="1000" required></textarea>
+          <label for="char-examples">对话示例</label><textarea id="char-examples" rows="5" maxlength="3000" placeholder="我：今天有点累。&#10;角色：那先歇一会儿，想说说今天发生了什么吗？"></textarea><p class="field-hint">写两三轮你喜欢的对话，更容易让模型理解语气。请勿放入需要保密的信息。</p>
+          <label for="char-extra">补充偏好</label><textarea id="char-extra" rows="3" maxlength="2000" placeholder="喜欢的话题、不喜欢的称呼、希望避免的表达…"></textarea>
+          <p class="field-hint">修改角色后会开启一段新的对话上下文；历史聊天仍保留并显示原角色名字。</p>
+          <p id="character-error" class="form-error" role="alert" hidden></p>
+          <div class="character-actions"><button id="character-save" class="primary" type="submit">保存并使用角色</button><button id="character-export" class="secondary" type="button">导出角色包 ↓</button><button id="character-import" class="secondary" type="button">导入角色包 ↑</button><input id="character-file" type="file" accept=".json,application/json" hidden></div>
+          <p class="field-hint">导入仅填入草稿，点击保存后生效。导出只包含本页设定，不包含聊天、计划和个人昵称。</p>
+        </form>
+      </section>
+      <aside class="character-side">
+        <section class="panel content-panel"><span class="eyebrow">FIRST HELLO</span><div class="role-preview-title"><div id="preview-avatar" class="companion-avatar">知</div><div><h2 id="preview-name">知夏</h2><p id="preview-identity" class="muted"></p></div></div><p id="preview-greeting" class="bubble"></p><p class="field-hint">这是开场白预览。性格与语气需要在实际聊天中体验，模型不一定每次都完全遵循。</p></section>
+        <section class="panel content-panel wechat-card"><div class="section-heading"><h2>在微信里陪伴</h2><span class="status-pending">个人号 · 未接入</span></div><p>希望像好友一样聊天的方向已保留。本版尚不能收取或发送个人微信消息。</p><p>微信扫码登录只用于登录网站，并不会授予读取或回复好友消息的权限。个人号接入方案还需确定可用的消息通道。</p><a href="https://developers.weixin.qq.com/doc/oplatform/Website_App/WeChat_Login/Wechat_Login.html" target="_blank" rel="noreferrer" class="text-button">查看微信官方登录能力 ↗</a></section>
+      </aside>
+    </div>
+  </section>
+  <section id="view-appearance" class="view" hidden>
+    <div class="page-title"><span class="eyebrow">MAKE YOURSELF AT HOME</span><h1>布置一个，属于你的角落。</h1><p>换上喜欢的头像、背景和颜色。先预览，再决定留下哪一种。</p></div>
+    <div class="appearance-layout">
+      <form id="appearance-form" class="appearance-editor">
+        <section class="panel content-panel"><div class="section-heading"><h2>我们的头像</h2><span class="muted">本机保存</span></div><div class="avatar-settings">
+          <div class="avatar-setting"><div id="edit-companion-avatar" class="companion-avatar avatar-large">伴</div><div><h3>陪伴角色</h3><div class="image-actions"><button type="button" class="secondary" data-upload="companionAvatar">上传头像</button><button type="button" class="text-button" data-remove-image="companionAvatar">移除</button></div></div></div>
+          <div class="avatar-setting"><div id="edit-user-avatar" class="companion-avatar avatar-large">我</div><div><h3>我的头像</h3><div class="image-actions"><button type="button" class="secondary" data-upload="userAvatar">上传头像</button><button type="button" class="text-button" data-remove-image="userAvatar">移除</button></div></div></div>
+        </div><p class="field-hint">支持 JPG、PNG、WebP，最大 10 MB。头像自动居中裁成方形；图片只保存在本机，不发给模型。</p></section>
+        <section class="panel content-panel"><h2>喜欢的颜色</h2><div id="theme-presets" class="theme-presets" aria-label="配色方案"></div><div class="color-fields"><label>主题色 <input id="appearance-accent" type="color" value="#52765b"><output id="accent-value">#52765b</output></label><label>背景底色 <input id="appearance-backgroundColor" type="color" value="#f6f7f3"><output id="background-value">#f6f7f3</output></label></div><p class="field-hint">主题色会用于按钮、选中项、进度和聊天气泡。</p></section>
+        <section class="panel content-panel"><div class="section-heading"><h2>背景里的小世界</h2><button type="button" class="text-button" data-remove-image="backgroundImage">移除背景图</button></div><button id="background-upload" type="button" class="background-upload" data-upload="backgroundImage"><span>＋</span> 选择一张喜欢的图片 <small>JPG / PNG / WebP · 最大 10 MB</small></button><label class="range-label" for="appearance-opacity">图片浓度 <output id="opacity-value">18%</output></label><input id="appearance-opacity" type="range" min="0" max="60" step="1" value="18"><p class="field-hint">背景图铺在页面底层，卡片保持清晰。较淡的图片更适合长时间阅读。</p></section>
+        <input id="appearance-image-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <p id="appearance-error" class="form-error" role="alert" hidden></p>
+        <div class="appearance-actions"><button id="appearance-save" type="submit" class="primary">保存外观</button><button id="appearance-cancel" type="button" class="secondary">取消预览</button><button id="appearance-reset" type="button" class="text-button">恢复默认</button><span id="appearance-status" class="muted">已保存的外观</span></div>
+      </form>
+      <aside class="appearance-preview panel content-panel"><span class="eyebrow">A LITTLE PREVIEW</span><h2>在这里，遇见你的陪伴</h2><div class="preview-scene"><div class="preview-person"><div id="appearance-companion-preview" class="companion-avatar">伴</div><strong id="appearance-role-name">知夏</strong></div><p class="bubble">今天也辛苦了。想先聊聊，还是一起完成一件小事？</p><div class="preview-user"><p class="bubble">慢慢来，一起向前。</p><div id="appearance-user-preview" class="companion-avatar">我</div></div><button class="primary" type="button" disabled>属于我们的日常 ✧</button></div><p class="field-hint">颜色与背景即时预览。离开此页会取消未保存的外观；保存后重开应用也会保留。</p></aside>
+    </div>
+  </section>
+  <footer>陪伴 <span>·</span> 不赶路，陪你走好每一步。 <a href="https://github.com/xuebao040715-cloud/peiban" target="_blank" rel="noreferrer">原作者：郑泽鸿 · 陪伴</a> <span id="save-status">记录保存在本机</span></footer>
+</main>
+<dialog id="settings-dialog"><form id="settings-form"><div class="section-heading"><h2>让陪伴更懂你</h2><button id="settings-close" type="button" class="icon-button" aria-label="关闭设置">×</button></div><p class="muted">选一个本地模型，开始属于你的陪伴。</p><label for="nickname">角色怎么称呼你</label><input id="nickname" placeholder="你的昵称（可选）" maxlength="40"><label for="model">对话模型</label><select id="model"></select><p id="model-hint" class="muted"></p><button id="refresh-models" class="text-button" type="button">↻ 重新连接 Ollama</button><div class="settings-info">对话、计划和记录保存在此项目的 personal 文件夹。模型在本机 Ollama 运行；无需 API Key。</div><button type="submit" class="primary wide">保存设置</button></form></dialog>
+</body></html>

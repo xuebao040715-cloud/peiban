@@ -16,3 +16,11 @@ personal/
 # 角色卡 PNG（本地打包产物，按需提交）
 character-card/*.png
 !character-card/example.png
+
+# 应用本地运行产物
+node_modules/
+*.log
+*.tmp
+
+# 仅用于本机交接，不随公开仓库发布
+docs/BUILD-NOTES.md

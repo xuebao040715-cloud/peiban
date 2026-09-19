@@ -1,8 +1,8 @@
 # Ollama Modelfile
 #
 # 用法：
-#   ollama create 知夏 -f configs/Modelfile
-#   ollama run 知夏
+#   ollama create zhixia -f configs/Modelfile
+#   ollama run zhixia
 #
 # 换底座模型：改下面这行 FROM。推荐 12B 以上（7B/8B 人格容易漂）。
 #   FROM qwen3:14b

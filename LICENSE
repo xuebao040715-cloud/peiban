@@ -1,21 +1,57 @@
-MIT License
+Peiban Attribution License 1.0
+陪伴署名许可证 1.0
 
-Copyright (c) 2026 study-senpai contributors
+Copyright (c) 2026 郑泽鸿
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Scope / 适用范围
+This license applies to original additions and modifications in the Peiban
+application. Pre-existing study-senpai materials remain under their original
+MIT license, reproduced in licenses/MIT-study-senpai.txt. This license does
+not remove rights already granted for those pre-existing materials.
+本许可证适用于「陪伴」应用新增内容及修改部分。原 study-senpai 角色包
+仍按原 MIT 许可证授权，原许可见 licenses/MIT-study-senpai.txt。
+本许可证不撤销原材料已经授予的权利。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Permission / 授权
+Permission is granted, free of charge, to use, copy, modify, merge, publish,
+distribute, sublicense and sell copies of the covered software and documentation,
+including commercial use, subject to the following conditions:
+允许免费使用、复制、修改、合并、转载、分发、再许可及销售本许可证覆盖的
+软件与文档（含商用），但必须遵守下列条件：
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. Retain this license, copyright notice and attribution in all copies or
+   substantial portions, including modified versions.
+   在副本、实质性部分及修改版本中保留本许可证、版权声明和署名。
+
+2. When republishing or distributing the project or a derivative version,
+   prominently include the following attribution and source link in the
+   README, distribution page or accompanying documentation:
+   “Original author / 原作者：郑泽鸿”
+   “Original project / 原项目：陪伴 (Peiban)”
+   “https://github.com/xuebao040715-cloud/peiban”
+   转载、再分发或发布二次开发版本时，必须在 README、发布页或随附文档的
+   明显位置保留上述原作者姓名、原项目名称和项目链接。
+
+3. Distributed applications with a user interface must also display that
+   attribution in an accessible About, Credits or License view. Indicate
+   that modified versions have been modified; do not imply author endorsement.
+   带用户界面的发行版还须在可访问的「关于」「鸣谢」或「许可」中展示上述
+   署名。修改版应标明经过修改，不得暗示原作者为修改版背书。
+
+4. You may add your own contribution notices and license your additions,
+   but may not remove the above attribution requirements for covered material.
+   可添加自己的贡献署名并为新增内容选择许可，但不得移除受本许可证覆盖
+   内容的上述署名要求。仅在本机进行未分发的修改，无需另行公开发表声明。
+
+Disclaimer / 免责声明
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE SOFTWARE
+OR ITS USE, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE.
+软件按「原样」提供，不作任何明示或默示保证。在适用法律允许的范围内，
+作者及版权人不对使用本软件产生的索赔、损害或其他责任承担责任。
+
+This is a custom license, not the standard MIT license. The Chinese text
+prevails in the event of a discrepancy between the two language versions.
+这是自定义许可证，并非标准 MIT 许可证。中英文存在歧义时以中文为准。
