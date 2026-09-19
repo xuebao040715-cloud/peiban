@@ -1,6 +1,6 @@
 # 署名与来源
 
-原作者：**郑泽鸿**
+原作者：**xuebao040715-cloud**
 
 原项目：**陪伴 (Peiban)**
 
@@ -14,6 +14,6 @@
 
 推荐保留的文字：
 
-> 本项目基于郑泽鸿的「陪伴 (Peiban)」开发。
+> 本项目基于 xuebao040715-cloud 的「陪伴 (Peiban)」开发。
 > 原项目：https://github.com/xuebao040715-cloud/peiban
 > 本版本由［修改者名称］修改。

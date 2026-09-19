@@ -1,6 +1,6 @@
 # 陪伴
 
-**作者：郑泽鸿** · [GitHub 项目](https://github.com/xuebao040715-cloud/peiban)
+**作者：xuebao040715-cloud** · [GitHub 项目](https://github.com/xuebao040715-cloud/peiban)
 
 转载和发布二次开发版本须保留作者署名及项目链接，详见 [署名说明](NOTICE.md) 与 [许可证](LICENSE)。
 
@@ -128,4 +128,4 @@ npm test
 
 ## License
 
-应用新增内容与修改部分采用 **陪伴署名许可证 1.0**：允许使用、修改和商用；转载、再分发或发布二次开发版本必须保留 **郑泽鸿** 的署名及原项目链接，带界面的发行版还须在关于/鸣谢/许可中展示。详见 [LICENSE](LICENSE) 和 [NOTICE.md](NOTICE.md)。原角色包继续适用其 [原 MIT 许可证](licenses/MIT-study-senpai.txt)。
+应用新增内容与修改部分采用 **陪伴署名许可证 1.0**：允许使用、修改和商用；转载、再分发或发布二次开发版本必须保留 **xuebao040715-cloud** 的署名及原项目链接，带界面的发行版还须在关于/鸣谢/许可中展示。详见 [LICENSE](LICENSE) 和 [NOTICE.md](NOTICE.md)。原角色包继续适用其 [原 MIT 许可证](licenses/MIT-study-senpai.txt)。
