@@ -26,6 +26,15 @@ async function api(url, options = {}) {
   return data;
 }
 function notice(message) { $('notice').textContent = message; $('notice').hidden = !message; }
+async function encodeState(payload) {
+  const text = JSON.stringify(payload);
+  if (typeof CompressionStream === 'undefined') {
+    return { body: text, headers: { 'Content-Type': 'application/json' } };
+  }
+  const gz = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  const buffer = await new Response(gz).arrayBuffer();
+  return { body: buffer, headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' } };
+}
 function mutate(change, { includeAppearance = false } = {}) {
   const action = mutationQueue.then(async () => {
     const draft = structuredClone(state);
@@ -34,7 +43,8 @@ function mutate(change, { includeAppearance = false } = {}) {
     const payload = includeAppearance ? draft : { ...draft, settings: { ...draft.settings, appearance: undefined } };
     $('save-status').textContent = '正在保存…';
     try {
-      const result = await api('/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const encoded = await encodeState(payload);
+      const result = await api('/api/state', { method: 'PUT', headers: encoded.headers, body: encoded.body });
       state = { ...draft, version: result.version };
       $('save-status').textContent = '已保存到本机';
       renderData();

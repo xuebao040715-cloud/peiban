@@ -537,3 +537,21 @@ test('pet window endpoint validates the move before touching the OS', async t =>
   assert.match(page, /bindDrag/);
   assert.match(page, /api\/pet\/window/);
 });
+test('state saves accept gzipped bodies and reject broken ones', async t => {
+  const { gzipSync } = await import('node:zlib');
+  const { base } = await fixture(t);
+  const state = await (await fetch(base + '/api/state')).json();
+  state.settings.nickname = '压缩测试';
+  const gz = gzipSync(Buffer.from(JSON.stringify(state), 'utf8'));
+  const ok = await fetch(base + '/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' }, body: gz });
+  assert.equal(ok.status, 200);
+  const saved = await (await fetch(base + '/api/state')).json();
+  assert.equal(saved.settings.nickname, '压缩测试');
+
+  const broken = await fetch(base + '/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' }, body: Buffer.from('not gzip') });
+  assert.equal(broken.status, 400);
+
+  const client = await (await fetch(base + '/app.js')).text();
+  assert.match(client, /CompressionStream/);
+  assert.match(client, /Content-Encoding': 'gzip'/);
+});
