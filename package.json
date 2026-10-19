@@ -1,6 +1,6 @@
 {
   "name": "peiban",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "陪伴：本地 AI 聊天、学习计划与陪伴记录",
   "type": "module",
@@ -8,7 +8,7 @@
   "scripts": {
     "start": "node app/server.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check app/server.mjs && node --check app/public/app.js && node --check app/public/character.js && node --check app/public/appearance.js"
+    "check": "node --check app/server.mjs && node --check app/public/app.js && node --check app/public/character.js && node --check app/public/appearance.js && node --check app/public/options.js"
   },
   "license": "SEE LICENSE IN LICENSE"
 }
