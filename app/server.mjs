@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import os from 'node:os';
+import { gunzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_CHARACTER, validCharacter, cleanCharacter, characterPrompt } from './public/character.js';
@@ -106,7 +107,15 @@ async function readJson(req) {
     if (bytes > 8 * 1024 * 1024) throw Object.assign(new Error('数据过大，请先导出备份并整理记录。'), { status: 413 });
     chunks.push(chunk);
   }
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  const raw = Buffer.concat(chunks);
+  let text;
+  if (String(req.headers['content-encoding'] || '').toLowerCase().includes('gzip')) {
+    try { text = gunzipSync(raw, { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8'); }
+    catch { throw Object.assign(new Error('压缩请求解不开，检查压缩方式。'), { status: 400 }); }
+  } else {
+    text = raw.toString('utf8');
+  }
+  try { return JSON.parse(text); }
   catch { throw Object.assign(new Error('请求不是有效的 JSON。'), { status: 400 }); }
 }
 const json = (res, status, data) => {
