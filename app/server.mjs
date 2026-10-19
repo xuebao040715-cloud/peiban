@@ -7,7 +7,7 @@ import { DEFAULT_APPEARANCE, validAppearance, cleanAppearance } from './public/a
 import { DEFAULT_OPTIONS, validOptions, cleanOptions } from './public/options.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [] });
+const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false, voiceName: '', voiceRate: 1 }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [] });
 const isString = (s, max) => typeof s === 'string' && s.length <= max;
 const dateKey = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const validMemory = s =>
@@ -23,6 +23,8 @@ function validState(s) {
     (s.settings.appearance === undefined || validAppearance(s.settings.appearance)) &&
     (s.settings.options === undefined || validOptions(s.settings.options)) &&
     (s.settings.voice === undefined || typeof s.settings.voice === 'boolean') &&
+    (s.settings.voiceName === undefined || isString(s.settings.voiceName, 120)) &&
+    (s.settings.voiceRate === undefined || (Number.isFinite(s.settings.voiceRate) && s.settings.voiceRate >= 0.6 && s.settings.voiceRate <= 1.4)) &&
     Array.isArray(s.tasks) && s.tasks.length <= 3000 && s.tasks.every(t =>
       isString(t.id, 100) && isString(t.title, 200) && dateKey(t.date) && typeof t.done === 'boolean') &&
     Array.isArray(s.messages) && s.messages.length <= 5000 && s.messages.every(m =>
@@ -82,6 +84,8 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
   state.settings.appearance = state.settings.appearance ? cleanAppearance(state.settings.appearance) : { ...DEFAULT_APPEARANCE };
   state.settings.options = state.settings.options ? cleanOptions(state.settings.options) : { ...DEFAULT_OPTIONS };
   state.settings.voice = state.settings.voice === true;
+  state.settings.voiceName = typeof state.settings.voiceName === 'string' ? state.settings.voiceName : '';
+  state.settings.voiceRate = Number.isFinite(state.settings.voiceRate) ? Math.min(1.4, Math.max(0.6, state.settings.voiceRate)) : 1;
   state.episodes = Array.isArray(state.episodes) ? state.episodes : [];
   state.facts = Array.isArray(state.facts) ? state.facts : [];
   const persona = await readFile(path.join(root, '..', 'persona', 'app-system-prompt.zh.txt'), 'utf8');
@@ -135,9 +139,11 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
           const appearance = incoming.settings.appearance ? cleanAppearance(incoming.settings.appearance) : state.settings.appearance;
           const options = incoming.settings.options ? cleanOptions(incoming.settings.options) : state.settings.options;
           const voice = typeof incoming.settings.voice === 'boolean' ? incoming.settings.voice : state.settings.voice;
+          const voiceName = typeof incoming.settings.voiceName === 'string' ? incoming.settings.voiceName.slice(0, 120) : state.settings.voiceName;
+          const voiceRate = Number.isFinite(incoming.settings.voiceRate) ? Math.min(1.4, Math.max(0.6, incoming.settings.voiceRate)) : state.settings.voiceRate;
           const next = {
             ...incoming,
-            settings: { ...incoming.settings, character, appearance, options, voice },
+            settings: { ...incoming.settings, character, appearance, options, voice, voiceName, voiceRate },
             episodes: Array.isArray(incoming.episodes) ? incoming.episodes : state.episodes,
             facts: Array.isArray(incoming.facts) ? incoming.facts : state.facts,
             version: state.version + 1

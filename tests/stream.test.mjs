@@ -191,3 +191,42 @@ test('new module is served, and every asset carries the package version', async 
   assert.match(client, /\/api\/chat\/stream/);
   assert.match(client, /\/api\/memory\/summarize/);
 });
+
+test('voice name and rate are validated and survive partial saves', async t => {
+  const { base } = await fixture(t);
+  const state = await (await fetch(base + '/api/state')).json();
+  assert.equal(state.settings.voiceName, '');
+  assert.equal(state.settings.voiceRate, 1);
+
+  state.settings.voiceName = 'Microsoft 晓晓 Online (Natural) - Chinese (Mandarin, Simplified)';
+  state.settings.voiceRate = 0.9;
+  assert.equal((await putState(base, state)).status, 200);
+  const saved = await (await fetch(base + '/api/state')).json();
+  assert.match(saved.settings.voiceName, /晓晓/);
+  assert.equal(saved.settings.voiceRate, 0.9);
+
+  assert.equal((await putState(base, { ...saved, settings: { ...saved.settings, voiceRate: 3 } })).status, 400);
+  assert.equal((await putState(base, { ...saved, settings: { ...saved.settings, voiceName: 'x'.repeat(121) } })).status, 400);
+
+  // 老客户端省略这两个字段时不能清空用户选好的音色。
+  const legacy = { ...saved, settings: { ...saved.settings } };
+  delete legacy.settings.voiceName;
+  delete legacy.settings.voiceRate;
+  assert.equal((await putState(base, legacy)).status, 200);
+  const kept = await (await fetch(base + '/api/state')).json();
+  assert.match(kept.settings.voiceName, /晓晓/);
+  assert.equal(kept.settings.voiceRate, 0.9);
+});
+
+test('the voice picker and pause-friendly rendering ship with the page', async t => {
+  const { base } = await fixture(t);
+  const html = await (await fetch(base + '/')).text();
+  assert.match(html, /id="voice-select"/);
+  assert.match(html, /id="voice-rate"/);
+  assert.match(html, /id="voice-test"/);
+  const client = await (await fetch(base + '/app.js')).text();
+  // 逐句合成（带停顿）与神经语音优先，是不再"像机器念稿"的关键。
+  assert.match(client, /speakQueue/);
+  assert.match(client, /natural\/i|Natural/i);
+  assert.match(client, /voiceschanged/);
+});

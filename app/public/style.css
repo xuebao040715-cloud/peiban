@@ -17,3 +17,8 @@
 .option-grid input[type=range]{padding:0;accent-color:var(--green)}
 .option-grid small{display:block;font-size:10px;color:#a6ada7;margin-top:3px}
 @media (max-width:520px){.option-grid{grid-template-columns:1fr}}
+/* 朗读音色与语速 */
+.voice-grid{grid-template-columns:1.35fr 1fr}
+.voice-grid select{font-size:12px;padding:7px 9px;height:auto}
+.voice-test-line{margin:-6px 0 18px}
+.voice-test-line button{font-size:12px}

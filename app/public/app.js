@@ -162,23 +162,89 @@ function paintStream() {
   }
   if (streamNode) { streamNode.textContent = streamText; scrollChat(); }
 }
-function speak(text) {
-  if (!state.settings.voice || !('speechSynthesis' in window)) return;
-  stopSpeaking();
+let voices = [], speakQueue = [], speakTimer = null;
+function chineseVoices() {
+  if (!('speechSynthesis' in window)) return [];
+  const list = speechSynthesis.getVoices();
+  if (list.length) voices = list;
+  return (list.length ? list : voices).filter(v => /^zh/i.test(v.lang));
+}
+// 神经语音 > 在线 > 普通话 > 其它；本地的 SAPI 语音通常很旧，降权。
+function scoreVoice(v) {
+  let score = 0;
+  if (/natural/i.test(v.name)) score += 6;
+  if (/online/i.test(v.name)) score += 2;
+  if (/xiaoxiao|晓晓/i.test(v.name)) score += 3;
+  if (/^zh-CN$/i.test(v.lang)) score += 2;
+  if (/HK|TW|liaoning|shaanxi|Cantonese|Taiwanese|Traditional/i.test(`${v.lang} ${v.name}`)) score -= 4;
+  if (v.localService) score -= 1;
+  return score;
+}
+function resolveVoice() {
+  const list = chineseVoices();
+  if (!list.length) return null;
+  return list.find(v => v.name === state.settings.voiceName) || list.slice().sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
+}
+function toSpeechChunks(text) {
   const plain = text.replace(/```[\s\S]*?```/g, '').replace(/[*_`#>~]/g, '')
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
-  if (!plain) return;
-  const speech = new SpeechSynthesisUtterance(plain);
-  speech.lang = 'zh-CN'; speech.rate = 1.02;
-  const voice = speechSynthesis.getVoices().find(v => /^zh/i.test(v.lang));
-  if (voice) speech.voice = voice;
-  speech.onend = speech.onerror = () => { utterance = null; };
-  utterance = speech;
-  speechSynthesis.speak(speech);
+  if (!plain) return [];
+  return plain.split(/(?<=[。！？!?…；;])/).map(part => part.trim()).filter(Boolean);
+}
+function speakNext() {
+  const next = speakQueue.shift();
+  if (!next) { utterance = null; return; }
+  next.onend = () => {
+    utterance = null;
+    if (speakQueue.length) speakTimer = setTimeout(speakNext, 130);
+  };
+  next.onerror = () => { speakQueue = []; utterance = null; };
+  utterance = next;
+  speechSynthesis.speak(next);
+}
+function speak(text, { force = false } = {}) {
+  if ((!force && !state.settings.voice) || !('speechSynthesis' in window)) return;
+  stopSpeaking();
+  const chunks = toSpeechChunks(text);
+  if (!chunks.length) return;
+  const voice = resolveVoice();
+  const rate = Number(state.settings.voiceRate) || 1;
+  speakQueue = chunks.map(chunk => {
+    const line = new SpeechSynthesisUtterance(chunk);
+    line.lang = voice?.lang || 'zh-CN';
+    if (voice) line.voice = voice;
+    line.rate = rate;
+    // 逐句合成，句间留一点停顿，比整段一口气念自然得多
+    return line;
+  });
+  speakNext();
 }
 function stopSpeaking() {
+  speakQueue = [];
+  if (speakTimer) { clearTimeout(speakTimer); speakTimer = null; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   utterance = null;
+}
+function syncVoiceLabel() {
+  $('voice-rate-value').textContent = Number($('voice-rate').value).toFixed(2);
+}
+function renderVoiceOptions() {
+  const select = $('voice-select');
+  if (!select) return;
+  const list = chineseVoices();
+  const current = state.settings.voiceName || '';
+  const options = [new Option('自动（优先神经语音）', '')];
+  for (const voice of list.slice().sort((a, b) => scoreVoice(b) - scoreVoice(a))) {
+    const label = voice.name.replace(/^Microsoft\s*/, '').replace(/\s*-\s*Chinese.*$/, '').trim();
+    options.push(new Option(`${label}${voice.localService ? ' · 本地' : ' · 在线'}`, voice.name));
+  }
+  if (current && !list.some(v => v.name === current)) options.push(new Option(`${current}（系统里已找不到）`, current));
+  select.replaceChildren(...options);
+  select.value = current;
+  const hint = $('voice-hint');
+  if (hint) hint.textContent = list.length <= 1
+    ? '只检测到本地 SAPI 语音，音质较旧。用 Microsoft Edge 打开这个地址，可以解锁微软神经语音（晓晓、云希等）。'
+    : `检测到 ${list.length} 个中文语音。标「在线」的是神经语音，明显更自然。`;
 }
 async function askModel() {
   if (busy) return;
@@ -359,19 +425,24 @@ async function init() {
     $('voice').checked = !!state.settings.voice;
     const options = state.settings.options || DEFAULT_OPTIONS;
     $('temperature').value = options.temperature; $('numPredict').value = options.numPredict; $('numCtx').value = String(options.numCtx);
-    syncOptions();
+    renderVoiceOptions();
+    $('voice-rate').value = state.settings.voiceRate || 1;
+    syncOptions(); syncVoiceLabel();
     $('settings-dialog').showModal();
   });
   $('settings-close').addEventListener('click', () => $('settings-dialog').close());
   $('temperature').addEventListener('input', syncOptions);
   $('numPredict').addEventListener('input', syncOptions);
+  $('voice-rate').addEventListener('input', syncVoiceLabel);
+  $('voice-test').addEventListener('click', () => speak('在呢。今天想先聊聊，还是一起开始一件小事？', { force: true }));
+  if ('speechSynthesis' in window) { speechSynthesis.addEventListener('voiceschanged', renderVoiceOptions); renderVoiceOptions(); }
   $('settings-form').addEventListener('submit', async e => {
     e.preventDefault(); const nickname = $('nickname').value.trim(), model = $('model').value;
     if (!model) { notice('请先连接 Ollama 并选择模型。'); return; }
     let options;
     try { options = cleanOptions({ temperature:Number($('temperature').value), numPredict:Number($('numPredict').value), numCtx:Number($('numCtx').value) }); }
     catch (error) { notice(error.message); return; }
-    try { await mutate(s => { s.settings = { ...s.settings, nickname, model, voice:$('voice').checked, options }; }); $('settings-dialog').close(); renderMessages(); }
+    try { await mutate(s => { s.settings = { ...s.settings, nickname, model, voice:$('voice').checked, voiceName:$('voice-select').value, voiceRate:Number($('voice-rate').value), options }; }); $('settings-dialog').close(); renderMessages(); }
     catch { /* keep dialog open */ }
   });
   $('refresh-models').addEventListener('click', connect);
