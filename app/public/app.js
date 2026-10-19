@@ -609,6 +609,7 @@ function renderAppearanceEditor() {
   $('appearance-role-name').textContent = state.settings.character.name;
   ['edit-companion-avatar','appearance-companion-preview'].forEach(id => setAvatar($(id),appearanceDraft.companionAvatar,state.settings.character.name));
   ['edit-user-avatar','appearance-user-preview'].forEach(id => setAvatar($(id),appearanceDraft.userAvatar,state.settings.nickname || '我'));
+  if ($('edit-pet-image')) setAvatar($('edit-pet-image'), appearanceDraft.petImage, '伴');
   $('background-upload').classList.toggle('has-image',!!appearanceDraft.backgroundImage);
   $('background-upload').style.backgroundImage = appearanceDraft.backgroundImage ? `linear-gradient(#ffffffb8,#ffffffb8),url("${appearanceDraft.backgroundImage}")` : 'none';
   $('background-upload').setAttribute('aria-label',appearanceDraft.backgroundImage ? '更换背景图片' : '上传背景图片');
