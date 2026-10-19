@@ -48,7 +48,7 @@ function setView(next) {
   view = next;
   document.querySelectorAll('.view').forEach(n => n.hidden = n.id !== `view-${view}`);
   document.querySelectorAll('nav [data-view]').forEach(n => { n.classList.toggle('active', n.dataset.view === view); n.setAttribute('aria-current', n.dataset.view === view ? 'page' : 'false'); });
-  if (view === 'chat') scrollChat();
+  if (view === 'chat') scrollChat(true);
   if (view === 'appearance') { appearanceDraft = structuredClone(state.settings.appearance); appearanceDirty = false; renderAppearanceEditor(); }
 }
 function greeting() {
@@ -75,7 +75,13 @@ function showMessage(m) {
   if (m.role === 'user') row.append(avatar);
   return row;
 }
-function scrollChat() { $('messages').scrollTop = $('messages').scrollHeight; }
+let stickToBottom = true;
+function scrollChat(force = false) {
+  const box = $('messages');
+  if (!box) return;
+  // 用户往上翻的时候不要把他拽回底部
+  if (force || stickToBottom) box.scrollTop = box.scrollHeight;
+}
 function renderMessages() {
   const box = $('messages');
   box.replaceChildren(el('div', 'conversation-date', '一段属于你的安静时间'));
@@ -465,6 +471,10 @@ async function init() {
   $('plan-date').addEventListener('change', renderData);
   $('chat-form').addEventListener('submit', e => { e.preventDefault(); sendMessage($('chat-input').value); });
   $('chat-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(e.currentTarget.value); } });
+  $('messages').addEventListener('scroll', () => {
+    const box = $('messages');
+    stickToBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  }, { passive: true });
   document.querySelectorAll('[data-prompt]').forEach(b => b.addEventListener('click', () => sendMessage(b.dataset.prompt)));
   $('stop').addEventListener('click', () => { controller?.abort(); stopSpeaking(); });
   $('retry-chat').addEventListener('click', askModel);
