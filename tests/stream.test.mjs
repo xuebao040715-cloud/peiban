@@ -297,3 +297,94 @@ test('local TTS proxy speaks through each adapter and only allows loopback', asy
   assert.equal((await putState(base, remote)).status, 400);
   assert.equal((await speak('')).status, 400);
 });
+test('pet observes the screen through a vision model and rate-limits itself', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'peiban-pet-'));
+  const seen = [];
+  const ollama = http.createServer(async (req, res) => {
+    if (req.url === '/api/tags') {
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ models: [{ name: 'llama3.2:3b' }, { name: 'qwen2.5vl:7b' }] }));
+    }
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    seen.push(JSON.parse(body));
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ message: { role: 'assistant', content: '{"doing":"在看论文","line":"又在啃论文呀，累了就说。"}' } }));
+  });
+  const upstream = await start(ollama);
+  const shot = Buffer.from('fake-jpeg-bytes');
+  const app = await createApp({ dataDir: dir, ollamaUrl: upstream, capture: async () => shot });
+  const base = await start(app);
+  t.after(async () => { await stop(app); await stop(ollama); await rm(dir, { recursive: true, force: true }); });
+
+  const observe = () => fetch(base + '/api/pet/observe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal((await observe()).status, 403);
+
+  const state = await (await fetch(base + '/api/state')).json();
+  state.settings.pet = { enabled: true, intervalMinutes: 5, size: 'medium', alwaysOnTop: true, model: '' };
+  assert.equal((await putState(base, state)).status, 200);
+
+  const first = await observe();
+  assert.equal(first.status, 200);
+  const data = await first.json();
+  assert.equal(data.doing, '在看论文');
+  assert.match(data.line, /论文/);
+  assert.equal(data.model, 'qwen2.5vl:7b');
+  const payload = seen.at(-1);
+  assert.equal(payload.stream, false);
+  assert.equal(payload.messages[1].images[0], shot.toString('base64'));
+  assert.match(payload.messages[0].content, /知夏|扮演/);
+
+  assert.equal((await observe()).status, 429);
+
+  // 指定模型优先于自动挑选
+  const next = await (await fetch(base + '/api/state')).json();
+  next.settings.pet = { ...next.settings.pet, model: 'llama3.2:3b' };
+  assert.equal((await putState(base, next)).status, 200);
+});
+
+test('pet surfaces capture and parse failures instead of hanging', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'peiban-pet-fail-'));
+  const ollama = http.createServer(async (req, res) => {
+    if (req.url === '/api/tags') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ models: [{ name: 'qwen2.5vl:7b' }] })); }
+    for await (const _ of req) { /* drain */ }
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ message: { role: 'assistant', content: '我看到你在写代码。' } }));
+  });
+  const upstream = await start(ollama);
+  let mode = 'capture';
+  const app = await createApp({
+    dataDir: dir, ollamaUrl: upstream,
+    capture: async () => { if (mode === 'capture') throw new Error('no desktop session'); return Buffer.from('x'); }
+  });
+  const base = await start(app);
+  t.after(async () => { await stop(app); await stop(ollama); await rm(dir, { recursive: true, force: true }); });
+
+  const state = await (await fetch(base + '/api/state')).json();
+  state.settings.pet = { enabled: true, intervalMinutes: 5, size: 'medium', alwaysOnTop: true, model: 'qwen2.5vl:7b' };
+  assert.equal((await putState(base, state)).status, 200);
+
+  let response = await fetch(base + '/api/pet/observe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /截屏失败/);
+
+  mode = 'ok';
+  response = await fetch(base + '/api/pet/observe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(response.status, 502);
+  assert.match((await response.json()).error, /没有按要求返回/);
+});
+
+test('pet page and settings are served with the shared config', async t => {
+  const { base } = await fixture(t);
+  const page = await (await fetch(base + '/pet')).text();
+  assert.match(page, /id="face"/);
+  assert.match(page, /id="dress"/);
+  const config = await fetch(base + '/pet-config.js');
+  assert.equal(config.status, 200);
+  assert.match(await config.text(), /DEFAULT_PET/);
+  const state = await (await fetch(base + '/api/state')).json();
+  assert.equal(state.settings.pet.enabled, false);
+  assert.equal(state.settings.pet.intervalMinutes, 5);
+  const broken = { ...state, settings: { ...state.settings, pet: { enabled: true, intervalMinutes: 0, size: 'medium', alwaysOnTop: true, model: '' } } };
+  assert.equal((await putState(base, broken)).status, 400);
+});

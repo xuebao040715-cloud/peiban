@@ -1,6 +1,7 @@
-import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.6.0';
-import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.6.0';
-import { DEFAULT_OPTIONS, cleanOptions } from './options.js?v=0.6.0';
+import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.7.0';
+import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.7.0';
+import { DEFAULT_OPTIONS, cleanOptions } from './options.js?v=0.7.0';
+import { DEFAULT_PET } from './pet-config.js?v=0.7.0';
 const $ = id => document.getElementById(id);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const uid = () => crypto.randomUUID();
@@ -478,6 +479,11 @@ async function init() {
     $('tts-url').value = state.settings.ttsUrl || 'http://127.0.0.1:9880';
     $('tts-voice').value = state.settings.ttsVoice || '';
     $('tts-model').value = state.settings.ttsModel || 'tts-1';
+    const pet = state.settings.pet || DEFAULT_PET;
+    $('pet-enabled').checked = !!pet.enabled;
+    $('pet-interval').value = String(pet.intervalMinutes || 5);
+    $('pet-size').value = pet.size || 'medium';
+    $('pet-model').value = pet.model || '';
     syncVoiceEngine();
     syncOptions(); syncVoiceLabel();
     $('settings-dialog').showModal();
@@ -488,6 +494,7 @@ async function init() {
   $('voice-rate').addEventListener('input', syncVoiceLabel);
   $('voice-engine').addEventListener('change', syncVoiceEngine);
   $('voice-test').addEventListener('click', () => speak('在呢。今天想先聊聊，还是一起开始一件小事？', { force: true }));
+  $('pet-open').addEventListener('click', () => window.open('/pet', 'peiban-pet', 'width=320,height=470'));
   if ('speechSynthesis' in window) { speechSynthesis.addEventListener('voiceschanged', renderVoiceOptions); renderVoiceOptions(); }
   $('settings-form').addEventListener('submit', async e => {
     e.preventDefault(); const nickname = $('nickname').value.trim(), model = $('model').value;
@@ -495,7 +502,7 @@ async function init() {
     let options;
     try { options = cleanOptions({ temperature:Number($('temperature').value), numPredict:Number($('numPredict').value), numCtx:Number($('numCtx').value) }); }
     catch (error) { notice(error.message); return; }
-    try { await mutate(s => { s.settings = { ...s.settings, nickname, model, voice:$('voice').checked, voiceName:$('voice-select').value, voiceRate:Number($('voice-rate').value), voiceEngine:$('voice-engine').value, ttsAdapter:$('tts-adapter').value, ttsUrl:$('tts-url').value.trim(), ttsVoice:$('tts-voice').value.trim(), ttsModel:$('tts-model').value.trim(), options }; }); $('settings-dialog').close(); renderMessages(); }
+    try { await mutate(s => { s.settings = { ...s.settings, nickname, model, voice:$('voice').checked, voiceName:$('voice-select').value, voiceRate:Number($('voice-rate').value), voiceEngine:$('voice-engine').value, ttsAdapter:$('tts-adapter').value, ttsUrl:$('tts-url').value.trim(), ttsVoice:$('tts-voice').value.trim(), ttsModel:$('tts-model').value.trim(), pet: { enabled:$('pet-enabled').checked, intervalMinutes:Number($('pet-interval').value), size:$('pet-size').value, alwaysOnTop: s.settings.pet?.alwaysOnTop ?? true, model:$('pet-model').value.trim() }, options }; }); $('settings-dialog').close(); renderMessages(); }
     catch { /* keep dialog open */ }
   });
   $('refresh-models').addEventListener('click', connect);

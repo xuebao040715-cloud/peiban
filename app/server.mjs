@@ -1,15 +1,47 @@
 import http from 'node:http';
-import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_CHARACTER, validCharacter, cleanCharacter, characterPrompt } from './public/character.js';
 import { DEFAULT_APPEARANCE, validAppearance, cleanAppearance } from './public/appearance.js';
 import { DEFAULT_OPTIONS, validOptions, cleanOptions } from './public/options.js';
+import { DEFAULT_PET, validPet, cleanPet } from './public/pet-config.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false, voiceName: '', voiceRate: 1, voiceEngine: 'system', ttsAdapter: 'openai', ttsUrl: 'http://127.0.0.1:9880', ttsModel: 'tts-1', ttsVoice: '' }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [] });
+const execFileAsync = promisify(execFile);
+// 桌宠的“眼睛”：调用 Windows 自带的截图能力，缩到 1024 宽后返回 JPEG。
+async function captureScreen() {
+  if (process.platform !== 'win32') throw new Error('屏幕捕捉目前只支持 Windows。');
+  const file = path.join(os.tmpdir(), `peiban-pet-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`);
+  try {
+    await execFileAsync('powershell.exe', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+      path.join(root, '..', 'tools', 'capture-screen.ps1'),
+      '-Out', file, '-Width', '1024', '-Quality', '70'
+    ], { timeout: 20000, windowsHide: true });
+    return await readFile(file);
+  } finally {
+    await rm(file, { force: true }).catch(() => {});
+  }
+}
+// 从视觉模型的回答里掏出 {doing,line}，容忍代码块和多余的话。
+function parseObservation(text) {
+  const raw = String(text).replace(/```[a-zA-Z]*\s*/g, '').trim();
+  const start = raw.indexOf('{'), end = raw.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  let data;
+  try { data = JSON.parse(raw.slice(start, end + 1)); } catch { return null; }
+  const doing = typeof data.doing === 'string' ? data.doing.trim().slice(0, 40) : '';
+  const line = typeof data.line === 'string' ? data.line.trim().slice(0, 200) : '';
+  return line ? { doing, line } : null;
+}
+const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false, voiceName: '', voiceRate: 1, voiceEngine: 'system', ttsAdapter: 'openai', ttsUrl: 'http://127.0.0.1:9880', ttsModel: 'tts-1', ttsVoice: '', pet: { ...DEFAULT_PET } }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [] });
 const VOICE_ENGINES = ['system', 'local'];
 const TTS_ADAPTERS = ['openai', 'gpt-sovits', 'custom'];
+
 const isLocalUrl = value => {
   try {
     const parsed = new URL(value);
@@ -39,6 +71,7 @@ function validState(s) {
     (s.settings.ttsUrl === undefined || (isString(s.settings.ttsUrl, 200) && (!s.settings.ttsUrl || isLocalUrl(s.settings.ttsUrl)))) &&
     (s.settings.ttsModel === undefined || isString(s.settings.ttsModel, 100)) &&
     (s.settings.ttsVoice === undefined || isString(s.settings.ttsVoice, 300)) &&
+    (s.settings.pet === undefined || validPet(s.settings.pet)) &&
     Array.isArray(s.tasks) && s.tasks.length <= 3000 && s.tasks.every(t =>
       isString(t.id, 100) && isString(t.title, 200) && dateKey(t.date) && typeof t.done === 'boolean') &&
     Array.isArray(s.messages) && s.messages.length <= 5000 && s.messages.every(m =>
@@ -79,7 +112,7 @@ function parseMemory(text) {
   return summary ? { summary, facts } : null;
 }
 
-export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.join(root, '..', 'personal'), ollamaUrl = process.env.OLLAMA_URL || 'http://127.0.0.1:11434' } = {}) {
+export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.join(root, '..', 'personal'), ollamaUrl = process.env.OLLAMA_URL || 'http://127.0.0.1:11434', capture = captureScreen } = {}) {
   const endpoint = new URL(ollamaUrl);
   if (!['http:', 'https:'].includes(endpoint.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(endpoint.hostname)) {
     throw new Error('OLLAMA_URL 必须指向本机 localhost / 127.0.0.1 / [::1]。');
@@ -105,10 +138,12 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
   state.settings.ttsUrl = isLocalUrl(state.settings.ttsUrl) ? state.settings.ttsUrl : 'http://127.0.0.1:9880';
   state.settings.ttsModel = typeof state.settings.ttsModel === 'string' ? state.settings.ttsModel : 'tts-1';
   state.settings.ttsVoice = typeof state.settings.ttsVoice === 'string' ? state.settings.ttsVoice : '';
+  state.settings.pet = validPet(state.settings.pet) ? cleanPet(state.settings.pet) : { ...DEFAULT_PET };
   state.episodes = Array.isArray(state.episodes) ? state.episodes : [];
   state.facts = Array.isArray(state.facts) ? state.facts : [];
   const persona = await readFile(path.join(root, '..', 'persona', 'app-system-prompt.zh.txt'), 'utf8');
   let saving = Promise.resolve();
+  let lastObserve = 0;
   // 两个对话接口共用：校验请求体、拼系统提示词、取当前模型参数。
   const chatPayload = body => {
     if (!isString(body.model, 100) || !body.model || !Array.isArray(body.messages) || body.messages.length < 1 || body.messages.length > 30 ||
@@ -165,9 +200,10 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
           const ttsUrl = typeof incoming.settings.ttsUrl === 'string' ? incoming.settings.ttsUrl.slice(0, 200) : state.settings.ttsUrl;
           const ttsModel = typeof incoming.settings.ttsModel === 'string' ? incoming.settings.ttsModel.slice(0, 100) : state.settings.ttsModel;
           const ttsVoice = typeof incoming.settings.ttsVoice === 'string' ? incoming.settings.ttsVoice.slice(0, 300) : state.settings.ttsVoice;
+          const pet = incoming.settings.pet ? cleanPet(incoming.settings.pet) : state.settings.pet;
           const next = {
             ...incoming,
-            settings: { ...incoming.settings, character, appearance, options, voice, voiceName, voiceRate, voiceEngine, ttsAdapter, ttsUrl, ttsModel, ttsVoice },
+            settings: { ...incoming.settings, character, appearance, options, voice, voiceName, voiceRate, voiceEngine, ttsAdapter, ttsUrl, ttsModel, ttsVoice, pet },
             episodes: Array.isArray(incoming.episodes) ? incoming.episodes : state.episodes,
             facts: Array.isArray(incoming.facts) ? incoming.facts : state.facts,
             version: state.version + 1
@@ -338,9 +374,59 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
         }
         return;
       }
+      // 桌宠观察：截一屏 → 交给本机视觉模型 → 返回「在做什么 + 一句角色台词」
+      if (url.pathname === '/api/pet/observe' && req.method === 'POST') {
+        const settings = state.settings;
+        await readJson(req).catch(() => ({}));
+        if (!settings.pet.enabled) return json(res, 403, { error: '桌宠还没启用。先在偏好设置里打开「启用桌宠」。' });
+        const now = Date.now();
+        if (now - lastObserve < 15000) return json(res, 429, { error: `刚看过一次，${Math.ceil((15000 - (now - lastObserve)) / 1000)} 秒后可以再看。` });
+        let image;
+        try { image = await capture(); }
+        catch (e) { return json(res, 503, { error: `截屏失败：${e.message}` }); }
+        if (!image?.length) return json(res, 503, { error: '截屏没有拿到图像。' });
+        let model = settings.pet.model;
+        if (!model) {
+          try {
+            const tags = await (await fetch(new URL('/api/tags', endpoint), { signal: AbortSignal.timeout(5000) })).json();
+            model = (tags.models || []).map(m => m.name).find(name => /vl|vision|llava|minicpm|moondream|gemma3/i.test(name)) || '';
+          } catch { /* 交给下面的报错 */ }
+        }
+        if (!model) return json(res, 400, { error: '没找到可用的视觉模型。先 ollama pull qwen2.5vl:7b，或在偏好设置里指定桌宠模型。' });
+        const c = settings.character;
+        const instruction = [
+          `你在扮演「${c.name}」（${c.identity}）。性格：${c.personality}。语气：${c.tone}。`,
+          '下面这张图是用户电脑屏幕的截图。判断用户此刻在做什么，并用角色的口吻随口说一句。',
+          '只输出 JSON，不要解释：',
+          '{"doing":"第三人称描述用户在做什么，不超过 12 个字，例如：在看论文","line":"第一人称，不超过 40 字，像朋友随口一句；不要复述 doing，不要说教，不要罗列画面细节"}'
+        ].join('\n');
+        try {
+          const response = await fetch(new URL('/api/chat', endpoint), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model, stream: false,
+              messages: [
+                { role: 'system', content: instruction },
+                { role: 'user', content: '这是当前屏幕截图。', images: [image.toString('base64')] }
+              ],
+              options: { temperature: 0.6, num_ctx: 4096, num_predict: 200 }
+            }),
+            signal: AbortSignal.timeout(90000)
+          });
+          if (!response.ok) return json(res, 502, { error: response.status === 404 ? '找不到桌宠模型，换一个视觉模型试试。' : '视觉模型调用失败，请稍后重试。' });
+          const result = await response.json();
+          const parsed = parseObservation(result.message?.content || '');
+          if (!parsed) return json(res, 502, { error: '模型没有按要求返回，换一个视觉模型试试。' });
+          lastObserve = Date.now();
+          return json(res, 200, { ...parsed, model, at: new Date().toISOString() });
+        } catch (e) {
+          if (!res.destroyed) return json(res, 503, { error: e.name === 'TimeoutError' ? '视觉模型响应超时。' : '连接中断，检查 Ollama 是否在运行。' });
+        }
+        return;
+      }
       if (url.pathname.startsWith('/api/')) return json(res, 404, { error: '接口不存在。' });
       if (!['GET', 'HEAD'].includes(req.method)) return json(res, 405, { error: '不支持的请求方法。' });
-      const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/character.js': ['character.js', 'text/javascript'], '/appearance.js': ['appearance.js', 'text/javascript'], '/options.js': ['options.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/workshop.css': ['workshop.css', 'text/css'], '/icon.svg': ['icon.svg', 'image/svg+xml'] };
+      const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/character.js': ['character.js', 'text/javascript'], '/appearance.js': ['appearance.js', 'text/javascript'], '/options.js': ['options.js', 'text/javascript'], '/pet-config.js': ['pet-config.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/workshop.css': ['workshop.css', 'text/css'], '/icon.svg': ['icon.svg', 'image/svg+xml'], '/pet': ['pet.html', 'text/html'], '/pet.js': ['pet.js', 'text/javascript'], '/pet.css': ['pet.css', 'text/css'] };
       const file = files[url.pathname];
       if (!file) return json(res, 404, { error: '页面不存在。' });
       const content = await readFile(path.join(root, 'public', file[0]));
