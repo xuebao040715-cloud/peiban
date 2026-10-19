@@ -114,6 +114,17 @@ const json = (res, status, data) => {
   res.end(JSON.stringify(data));
 };
 // 从模型输出里提取 {"summary","facts"}，容忍代码块包裹和多余文字。
+function parseFacts(text) {
+  const raw = String(text).replace(/```[a-zA-Z]*\s*/g, "").trim();
+  const start = raw.indexOf("["), end = raw.lastIndexOf("]");
+  if (start < 0 || end <= start) return [];
+  try {
+    const data = JSON.parse(raw.slice(start, end + 1));
+    return Array.isArray(data)
+      ? [...new Set(data.filter(f => typeof f === "string" && f.trim()).map(f => f.trim().slice(0, 120)))].slice(0, 4)
+      : [];
+  } catch { return []; }
+}
 function parseMemory(text) {
   const raw = String(text).replace(/```[a-zA-Z]*\s*/g, '').trim();
   const start = raw.indexOf('{'), end = raw.lastIndexOf('}');
@@ -360,6 +371,32 @@ messages: [{ role: 'system', content: characterPrompt(character) + '\n\n' + pers
           const result = await response.json();
           const parsed = parseMemory(result.message?.content || '');
           if (!parsed) return json(res, 502, { error: '模型没有按格式返回记忆，换一个模型或再试一次。' });
+          // 小模型经常懒得多写事实：facts 为空时再单独问一次，只让它列事实
+          if (!parsed.facts.length) {
+            try {
+              const retry = await fetch(new URL('/api/chat', endpoint), {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: body.model, stream: false,
+                  messages: [
+                    { role: 'system', content: '你只输出 JSON 数组，不要解释。' },
+                    { role: 'user', content: [
+                      '从下面的对话里提炼最多 4 条关于用户的长期事实。',
+                      '每条不超过 40 字，只写称呼、习惯、偏好、正在推进的事、重要关系；不要寒暄、不要一次性细节。',
+                      '没有就输出 []。',
+                      `对话：\n${transcript}`
+                    ].join('\n') }
+                  ],
+                  options: { temperature: 0.2, num_ctx: state.settings.options.numCtx, num_predict: 200 }
+                }),
+                signal: AbortSignal.timeout(60000)
+              });
+              if (retry.ok) {
+                const data = await retry.json();
+                parsed.facts = parseFacts(data.message?.content || '');
+              }
+            } catch { /* 第二步失败就保持空数组，不影响摘要 */ }
+          }
           return json(res, 200, { ...parsed, through: pending.at(-1).at, covered: pending.length, characterId: character.id, date: dateKey(body.date) ? body.date : new Date().toISOString().slice(0, 10) });
         } catch (e) {
           if (!res.destroyed) return json(res, 503, { error: e.name === 'TimeoutError' ? '整理记忆超时，请稍后重试。' : '连接中断，请检查 Ollama 后重试。' });

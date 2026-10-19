@@ -499,3 +499,32 @@ test('chat keeps its scroll position when the user scrolled up', async t => {
   assert.match(client, /scrollChat\(true\)/);
   assert.match(client, /addEventListener\('scroll'/);
 });
+test('memory retries a facts-only pass when the model returns none', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'peiban-facts-'));
+  let calls = 0;
+  const ollama = http.createServer(async (req, res) => {
+    if (req.url === '/api/tags') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ models: [{ name: 'test-model' }] })); }
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const payload = JSON.parse(body);
+    calls++;
+    const wantsFacts = String(payload.messages?.[0]?.content || '').includes('JSON 数组');
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ message: { role: 'assistant', content: wantsFacts ? '["用户在学 Rust","用户习惯晚睡"]' : '{"summary":"用户在折腾一门新语言。","facts":[]}' } }));
+  });
+  const upstream = await start(ollama);
+  const app = await createApp({ dataDir: dir, ollamaUrl: upstream });
+  const base = await start(app);
+  t.after(async () => { await stop(app); await stop(ollama); await rm(dir, { recursive: true, force: true }); });
+
+  const state = await (await fetch(base + '/api/state')).json();
+  for (let i = 0; i < 4; i++) state.messages.push({ id: 'm' + i, role: i % 2 ? 'assistant' : 'user', content: '第 ' + i + ' 句', at: new Date(Date.UTC(2026, 9, 20, 10, i)).toISOString() });
+  assert.equal((await putState(base, state)).status, 200);
+
+  const response = await fetch(base + '/api/memory/summarize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'test-model' }) });
+  assert.equal(response.status, 200);
+  const draft = await response.json();
+  assert.match(draft.summary, /新语言/);
+  assert.deepEqual(draft.facts, ['用户在学 Rust', '用户习惯晚睡']);
+  assert.equal(calls, 2);
+});
