@@ -7,7 +7,16 @@ import { DEFAULT_APPEARANCE, validAppearance, cleanAppearance } from './public/a
 import { DEFAULT_OPTIONS, validOptions, cleanOptions } from './public/options.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false, voiceName: '', voiceRate: 1 }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [] });
+const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false, voiceName: '', voiceRate: 1, voiceEngine: 'system', ttsAdapter: 'openai', ttsUrl: 'http://127.0.0.1:9880', ttsModel: 'tts-1', ttsVoice: '' }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [] });
+const VOICE_ENGINES = ['system', 'local'];
+const TTS_ADAPTERS = ['openai', 'gpt-sovits', 'custom'];
+const isLocalUrl = value => {
+  try {
+    const parsed = new URL(value);
+    return ['http:', 'https:'].includes(parsed.protocol) && ['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname);
+  } catch { return false; }
+};
+const TTS_URL_ERROR = '本地 TTS 地址必须是 http://127.0.0.1:端口 或 http://localhost:端口。';
 const isString = (s, max) => typeof s === 'string' && s.length <= max;
 const dateKey = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const validMemory = s =>
@@ -25,6 +34,11 @@ function validState(s) {
     (s.settings.voice === undefined || typeof s.settings.voice === 'boolean') &&
     (s.settings.voiceName === undefined || isString(s.settings.voiceName, 120)) &&
     (s.settings.voiceRate === undefined || (Number.isFinite(s.settings.voiceRate) && s.settings.voiceRate >= 0.6 && s.settings.voiceRate <= 1.4)) &&
+    (s.settings.voiceEngine === undefined || VOICE_ENGINES.includes(s.settings.voiceEngine)) &&
+    (s.settings.ttsAdapter === undefined || TTS_ADAPTERS.includes(s.settings.ttsAdapter)) &&
+    (s.settings.ttsUrl === undefined || (isString(s.settings.ttsUrl, 200) && (!s.settings.ttsUrl || isLocalUrl(s.settings.ttsUrl)))) &&
+    (s.settings.ttsModel === undefined || isString(s.settings.ttsModel, 100)) &&
+    (s.settings.ttsVoice === undefined || isString(s.settings.ttsVoice, 300)) &&
     Array.isArray(s.tasks) && s.tasks.length <= 3000 && s.tasks.every(t =>
       isString(t.id, 100) && isString(t.title, 200) && dateKey(t.date) && typeof t.done === 'boolean') &&
     Array.isArray(s.messages) && s.messages.length <= 5000 && s.messages.every(m =>
@@ -86,6 +100,11 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
   state.settings.voice = state.settings.voice === true;
   state.settings.voiceName = typeof state.settings.voiceName === 'string' ? state.settings.voiceName : '';
   state.settings.voiceRate = Number.isFinite(state.settings.voiceRate) ? Math.min(1.4, Math.max(0.6, state.settings.voiceRate)) : 1;
+  state.settings.voiceEngine = VOICE_ENGINES.includes(state.settings.voiceEngine) ? state.settings.voiceEngine : 'system';
+  state.settings.ttsAdapter = TTS_ADAPTERS.includes(state.settings.ttsAdapter) ? state.settings.ttsAdapter : 'openai';
+  state.settings.ttsUrl = isLocalUrl(state.settings.ttsUrl) ? state.settings.ttsUrl : 'http://127.0.0.1:9880';
+  state.settings.ttsModel = typeof state.settings.ttsModel === 'string' ? state.settings.ttsModel : 'tts-1';
+  state.settings.ttsVoice = typeof state.settings.ttsVoice === 'string' ? state.settings.ttsVoice : '';
   state.episodes = Array.isArray(state.episodes) ? state.episodes : [];
   state.facts = Array.isArray(state.facts) ? state.facts : [];
   const persona = await readFile(path.join(root, '..', 'persona', 'app-system-prompt.zh.txt'), 'utf8');
@@ -125,7 +144,7 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
     if (origin && !allowedHosts.some(h => origin === `http://${h}`)) return json(res, 403, { error: '拒绝跨站请求。' });
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     const url = new URL(req.url, 'http://localhost');
     try {
       if (url.pathname === '/api/state' && req.method === 'GET') return json(res, 200, state);
@@ -141,9 +160,14 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
           const voice = typeof incoming.settings.voice === 'boolean' ? incoming.settings.voice : state.settings.voice;
           const voiceName = typeof incoming.settings.voiceName === 'string' ? incoming.settings.voiceName.slice(0, 120) : state.settings.voiceName;
           const voiceRate = Number.isFinite(incoming.settings.voiceRate) ? Math.min(1.4, Math.max(0.6, incoming.settings.voiceRate)) : state.settings.voiceRate;
+          const voiceEngine = VOICE_ENGINES.includes(incoming.settings.voiceEngine) ? incoming.settings.voiceEngine : state.settings.voiceEngine;
+          const ttsAdapter = TTS_ADAPTERS.includes(incoming.settings.ttsAdapter) ? incoming.settings.ttsAdapter : state.settings.ttsAdapter;
+          const ttsUrl = typeof incoming.settings.ttsUrl === 'string' ? incoming.settings.ttsUrl.slice(0, 200) : state.settings.ttsUrl;
+          const ttsModel = typeof incoming.settings.ttsModel === 'string' ? incoming.settings.ttsModel.slice(0, 100) : state.settings.ttsModel;
+          const ttsVoice = typeof incoming.settings.ttsVoice === 'string' ? incoming.settings.ttsVoice.slice(0, 300) : state.settings.ttsVoice;
           const next = {
             ...incoming,
-            settings: { ...incoming.settings, character, appearance, options, voice, voiceName, voiceRate },
+            settings: { ...incoming.settings, character, appearance, options, voice, voiceName, voiceRate, voiceEngine, ttsAdapter, ttsUrl, ttsModel, ttsVoice },
             episodes: Array.isArray(incoming.episodes) ? incoming.episodes : state.episodes,
             facts: Array.isArray(incoming.facts) ? incoming.facts : state.facts,
             version: state.version + 1
@@ -266,6 +290,51 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
           return json(res, 200, { ...parsed, through: pending.at(-1).at, covered: pending.length, characterId: character.id, date: dateKey(body.date) ? body.date : new Date().toISOString().slice(0, 10) });
         } catch (e) {
           if (!res.destroyed) return json(res, 503, { error: e.name === 'TimeoutError' ? '整理记忆超时，请稍后重试。' : '连接中断，请检查 Ollama 后重试。' });
+        }
+        return;
+      }
+      // 本地 TTS 代理：只允许本机地址，避免把浏览器请求变成任意转发。
+      if (url.pathname === '/api/voice/speak' && req.method === 'POST') {
+        const body = await readJson(req);
+        if (!isString(body.text, 500) || !body.text.trim()) return json(res, 400, { error: '要朗读的文字为空或过长。' });
+        const settings = state.settings;
+        if (settings.voiceEngine !== 'local') return json(res, 400, { error: '当前用的是系统语音。请在偏好设置里把朗读引擎切到本地 TTS。' });
+        if (!isLocalUrl(settings.ttsUrl)) return json(res, 400, { error: TTS_URL_ERROR });
+        const base = settings.ttsUrl.replace(/\/+$/, '');
+        const text = body.text.trim();
+        try {
+          let response;
+          if (settings.ttsAdapter === 'gpt-sovits') {
+            const target = new URL(base + '/tts');
+            target.searchParams.set('text', text);
+            target.searchParams.set('text_lang', 'zh');
+            target.searchParams.set('prompt_lang', 'zh');
+            target.searchParams.set('media_type', 'wav');
+            target.searchParams.set('streaming_mode', 'false');
+            if (settings.ttsVoice) target.searchParams.set('ref_audio_path', settings.ttsVoice);
+            response = await fetch(target, { signal: AbortSignal.timeout(30000) });
+          } else if (settings.ttsAdapter === 'custom') {
+            response = await fetch(base, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text, voice: settings.ttsVoice || undefined }),
+              signal: AbortSignal.timeout(30000)
+            });
+          } else {
+            response = await fetch(base + '/v1/audio/speech', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: settings.ttsModel || 'tts-1', input: text, voice: settings.ttsVoice || 'alloy', response_format: 'wav' }),
+              signal: AbortSignal.timeout(30000)
+            });
+          }
+          if (!response.ok) return json(res, 502, { error: `本地 TTS 返回了 ${response.status}。检查服务是否在跑，以及音色/模型名是否正确。` });
+          const buffer = Buffer.from(await response.arrayBuffer());
+          if (!buffer.length) return json(res, 502, { error: '本地 TTS 没有返回音频数据。' });
+          if (buffer.length > 8 * 1024 * 1024) return json(res, 502, { error: '本地 TTS 返回的音频超过 8 MB，检查模型是否在复读。' });
+          const type = (response.headers.get('content-type') || '').split(';')[0].trim();
+          res.writeHead(200, { 'Content-Type': type.startsWith('audio/') ? type : 'audio/wav', 'Content-Length': buffer.length, 'Cache-Control': 'no-store' });
+          res.end(buffer);
+        } catch (e) {
+          if (!res.destroyed) return json(res, 503, { error: e.name === 'TimeoutError' ? '本地 TTS 超时，服务可能卡住了。' : '连不上本地 TTS，检查地址和端口是否正确。' });
         }
         return;
       }

@@ -230,3 +230,70 @@ test('the voice picker and pause-friendly rendering ship with the page', async t
   assert.match(client, /natural\/i|Natural/i);
   assert.match(client, /voiceschanged/);
 });
+test('local TTS proxy speaks through each adapter and only allows loopback', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'peiban-tts-'));
+  const whisper = [];
+  const wav = Buffer.from('RIFF....WAVEfmt ');
+  const tts = http.createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    whisper.push({ method: req.method, url: req.url, body });
+    if (req.url.startsWith('/v1/audio/speech')) { res.writeHead(200, { 'Content-Type': 'audio/wav' }); return res.end(wav); }
+    if (req.url.startsWith('/tts')) { res.writeHead(200, { 'Content-Type': 'audio/wav' }); return res.end(wav); }
+    if (req.url === '/boom') { res.writeHead(500); return res.end('nope'); }
+    res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
+    res.end(wav);
+  });
+  const ttsBase = await start(tts);
+  const app = await createApp({ dataDir: dir });
+  const base = await start(app);
+  t.after(async () => { await stop(app); await stop(tts); await rm(dir, { recursive: true, force: true }); });
+
+  const speak = (text = '你好。') => fetch(base + '/api/voice/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+  // 默认是系统语音，本地接口不该工作。
+  assert.equal((await speak()).status, 400);
+
+  let state = await (await fetch(base + '/api/state')).json();
+  state.settings = { ...state.settings, voiceEngine: 'local', ttsAdapter: 'openai', ttsUrl: ttsBase, ttsModel: 'tts-1', ttsVoice: 'alloy' };
+  assert.equal((await putState(base, state)).status, 200);
+
+  let response = await speak();
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'audio/wav');
+  assert.ok((await response.arrayBuffer()).byteLength > 0);
+  assert.deepEqual(JSON.parse(whisper.at(-1).body), { model: 'tts-1', input: '你好。', voice: 'alloy', response_format: 'wav' });
+  assert.equal(whisper.at(-1).url, '/v1/audio/speech');
+
+  state = await (await fetch(base + '/api/state')).json();
+  state.settings.ttsAdapter = 'gpt-sovits';
+  state.settings.ttsVoice = '/Users/me/ref.wav';
+  assert.equal((await putState(base, state)).status, 200);
+  response = await speak('第二句。');
+  assert.equal(response.status, 200);
+  const ttsUrl = new URL('http://x' + whisper.at(-1).url);
+  assert.equal(ttsUrl.pathname, '/tts');
+  assert.equal(ttsUrl.searchParams.get('text'), '第二句。');
+  assert.equal(ttsUrl.searchParams.get('ref_audio_path'), '/Users/me/ref.wav');
+  assert.equal(ttsUrl.searchParams.get('text_lang'), 'zh');
+
+  state = await (await fetch(base + '/api/state')).json();
+  state.settings.ttsAdapter = 'custom';
+  state.settings.ttsVoice = 'xiaoxia';
+  assert.equal((await putState(base, state)).status, 200);
+  response = await speak('第三句。');
+  assert.equal(response.status, 200);
+  assert.deepEqual(JSON.parse(whisper.at(-1).body), { text: '第三句。', voice: 'xiaoxia' });
+
+  // 上游报错要翻译成人话；远端地址直接拒绝保存。
+  state = await (await fetch(base + '/api/state')).json();
+  state.settings.ttsUrl = ttsBase + '/boom';
+  state.settings.ttsAdapter = 'custom';
+  assert.equal((await putState(base, state)).status, 200);
+  const broken = await speak();
+  assert.equal(broken.status, 502);
+  assert.match((await broken.json()).error, /本地 TTS 返回了/);
+
+  const remote = { ...state, settings: { ...state.settings, ttsUrl: 'https://api.example.com' } };
+  assert.equal((await putState(base, remote)).status, 400);
+  assert.equal((await speak('')).status, 400);
+});

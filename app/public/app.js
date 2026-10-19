@@ -1,6 +1,6 @@
-import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.5.0';
-import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.5.0';
-import { DEFAULT_OPTIONS, cleanOptions } from './options.js?v=0.5.0';
+import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.6.0';
+import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.6.0';
+import { DEFAULT_OPTIONS, cleanOptions } from './options.js?v=0.6.0';
 const $ = id => document.getElementById(id);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const uid = () => crypto.randomUUID();
@@ -162,7 +162,7 @@ function paintStream() {
   }
   if (streamNode) { streamNode.textContent = streamText; scrollChat(); }
 }
-let voices = [], speakQueue = [], speakTimer = null;
+let voices = [], speakQueue = [], speakTimer = null, speakToken = 0, audioCurrent = null, audioCleanup = null;
 function chineseVoices() {
   if (!('speechSynthesis' in window)) return [];
   const list = speechSynthesis.getVoices();
@@ -203,10 +203,23 @@ function speakNext() {
   speechSynthesis.speak(next);
 }
 function speak(text, { force = false } = {}) {
-  if ((!force && !state.settings.voice) || !('speechSynthesis' in window)) return;
+  if (!force && !state.settings.voice) return;
   stopSpeaking();
   const chunks = toSpeechChunks(text);
   if (!chunks.length) return;
+  if (state.settings.voiceEngine === 'local') {
+    const token = speakToken;
+    speakLocal(chunks, token).catch(error => {
+      if (token !== speakToken) return;           // 已被停止或换成另一句
+      notice(`本地 TTS 没成功（${error.message}），这一句改用系统语音。`);
+      speakSystem(chunks);
+    });
+    return;
+  }
+  speakSystem(chunks);
+}
+function speakSystem(chunks) {
+  if (!('speechSynthesis' in window)) return;
   const voice = resolveVoice();
   const rate = Number(state.settings.voiceRate) || 1;
   speakQueue = chunks.map(chunk => {
@@ -219,11 +232,44 @@ function speak(text, { force = false } = {}) {
   });
   speakNext();
 }
+async function speakLocal(chunks, token) {
+  for (const chunk of chunks) {
+    if (token !== speakToken) return;
+    const response = await fetch('/api/voice/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: chunk }) });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `TTS 返回 ${response.status}`);
+    }
+    const blob = await response.blob();
+    if (token !== speakToken) return;
+    await playAudio(blob);
+  }
+}
+function playAudio(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    const finish = () => { URL.revokeObjectURL(url); if (audioCurrent === audio) { audioCurrent = null; audioCleanup = null; } resolve(); };
+    audioCleanup = finish;
+    audio.onended = finish;
+    audio.onerror = () => { URL.revokeObjectURL(url); audioCurrent = null; audioCleanup = null; reject(new Error('音频播放失败')); };
+    audioCurrent = audio;
+    audio.play().catch(reject);
+  });
+}
 function stopSpeaking() {
+  speakToken++;
   speakQueue = [];
   if (speakTimer) { clearTimeout(speakTimer); speakTimer = null; }
+  if (audioCurrent) { audioCurrent.pause(); audioCleanup?.(); audioCurrent = null; audioCleanup = null; }
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   utterance = null;
+}
+function syncVoiceEngine() {
+  const local = $('voice-engine').value === 'local';
+  const localPanel = document.querySelector('.local-tts'), systemPanel = document.querySelector('.system-tts');
+  if (localPanel) localPanel.hidden = !local;
+  if (systemPanel) systemPanel.hidden = local;
 }
 function syncVoiceLabel() {
   $('voice-rate-value').textContent = Number($('voice-rate').value).toFixed(2);
@@ -427,6 +473,12 @@ async function init() {
     $('temperature').value = options.temperature; $('numPredict').value = options.numPredict; $('numCtx').value = String(options.numCtx);
     renderVoiceOptions();
     $('voice-rate').value = state.settings.voiceRate || 1;
+    $('voice-engine').value = state.settings.voiceEngine || 'system';
+    $('tts-adapter').value = state.settings.ttsAdapter || 'openai';
+    $('tts-url').value = state.settings.ttsUrl || 'http://127.0.0.1:9880';
+    $('tts-voice').value = state.settings.ttsVoice || '';
+    $('tts-model').value = state.settings.ttsModel || 'tts-1';
+    syncVoiceEngine();
     syncOptions(); syncVoiceLabel();
     $('settings-dialog').showModal();
   });
@@ -434,6 +486,7 @@ async function init() {
   $('temperature').addEventListener('input', syncOptions);
   $('numPredict').addEventListener('input', syncOptions);
   $('voice-rate').addEventListener('input', syncVoiceLabel);
+  $('voice-engine').addEventListener('change', syncVoiceEngine);
   $('voice-test').addEventListener('click', () => speak('在呢。今天想先聊聊，还是一起开始一件小事？', { force: true }));
   if ('speechSynthesis' in window) { speechSynthesis.addEventListener('voiceschanged', renderVoiceOptions); renderVoiceOptions(); }
   $('settings-form').addEventListener('submit', async e => {
@@ -442,7 +495,7 @@ async function init() {
     let options;
     try { options = cleanOptions({ temperature:Number($('temperature').value), numPredict:Number($('numPredict').value), numCtx:Number($('numCtx').value) }); }
     catch (error) { notice(error.message); return; }
-    try { await mutate(s => { s.settings = { ...s.settings, nickname, model, voice:$('voice').checked, voiceName:$('voice-select').value, voiceRate:Number($('voice-rate').value), options }; }); $('settings-dialog').close(); renderMessages(); }
+    try { await mutate(s => { s.settings = { ...s.settings, nickname, model, voice:$('voice').checked, voiceName:$('voice-select').value, voiceRate:Number($('voice-rate').value), voiceEngine:$('voice-engine').value, ttsAdapter:$('tts-adapter').value, ttsUrl:$('tts-url').value.trim(), ttsVoice:$('tts-voice').value.trim(), ttsModel:$('tts-model').value.trim(), options }; }); $('settings-dialog').close(); renderMessages(); }
     catch { /* keep dialog open */ }
   });
   $('refresh-models').addEventListener('click', connect);
