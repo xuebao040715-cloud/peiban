@@ -7,3 +7,13 @@
 .fact-chip:hover:not(:disabled){filter:brightness(.97)}
 #memory-remember{margin-bottom:14px}
 #memory-facts .empty,#memory-episodes .empty{font-size:12px;color:var(--muted);line-height:1.9;padding:6px 0}
+/* 偏好设置里的模型参数与朗读开关 */
+.check-line{display:flex!important;align-items:center;gap:9px;margin:20px 0 6px!important;font-size:12px;color:#758468}
+.check-line input[type=checkbox]{width:15px!important;height:15px;margin:0;flex:none;accent-color:var(--green)}
+.check-note{opacity:.65;font-weight:400}
+.option-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 18px;margin-bottom:6px}
+.option-grid label{margin:12px 0 4px!important}
+.option-grid output{float:right;color:var(--green);font-variant-numeric:tabular-nums}
+.option-grid input[type=range]{padding:0;accent-color:var(--green)}
+.option-grid small{display:block;font-size:10px;color:#a6ada7;margin-top:3px}
+@media (max-width:520px){.option-grid{grid-template-columns:1fr}}

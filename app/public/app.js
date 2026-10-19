@@ -282,7 +282,7 @@ async function connect() {
     const result = await api('/api/models'); models = result.models;
     $('connection').classList.toggle('offline', !models.length);
     $('connection-label').textContent = models.length ? '本地模型已连接' : '还没有模型';
-    $('model-hint').textContent = models.length ? '模型来自本机 Ollama，默认使用 Gemma 3 12B。' : '请先在 Ollama 下载一个模型，例如 gemma3:12b。';
+    $('model-hint').textContent = models.length ? '模型来自本机 Ollama，可在下面切换。' : '请先在 Ollama 下载一个模型，例如 gemma3:12b。';
   } catch (e) {
     models = []; $('connection').classList.add('offline'); $('connection-label').textContent = '重新连接'; $('model-hint').textContent = e.message;
   }
