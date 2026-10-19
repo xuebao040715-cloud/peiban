@@ -24,3 +24,6 @@ node_modules/
 
 # 仅用于本机交接，不随公开仓库发布
 docs/BUILD-NOTES.md
+
+# 桌宠窗口用的独立浏览器 profile（运行时生成，不入库）
+.pet-profile/
