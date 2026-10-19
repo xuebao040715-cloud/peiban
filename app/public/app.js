@@ -1,7 +1,7 @@
-import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.9.1';
-import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.9.1';
-import { DEFAULT_OPTIONS, cleanOptions } from './options.js?v=0.9.1';
-import { DEFAULT_PET } from './pet-config.js?v=0.9.1';
+import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.9.2';
+import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.9.2';
+import { DEFAULT_OPTIONS, cleanOptions } from './options.js?v=0.9.2';
+import { DEFAULT_PET } from './pet-config.js?v=0.9.2';
 const $ = id => document.getElementById(id);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const uid = () => crypto.randomUUID();
