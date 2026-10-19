@@ -492,3 +492,10 @@ test('the stage layer ships with pills, figure and talk button', async t => {
   assert.match(js, /settings\.direct/);
   assert.match(js, /chat\/stream/);
 });
+test('chat keeps its scroll position when the user scrolled up', async t => {
+  const { base } = await fixture(t);
+  const client = await (await fetch(base + '/app.js')).text();
+  assert.match(client, /stickToBottom/);
+  assert.match(client, /scrollChat\(true\)/);
+  assert.match(client, /addEventListener\('scroll'/);
+});
