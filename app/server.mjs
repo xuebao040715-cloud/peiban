@@ -38,7 +38,7 @@ function parseObservation(text) {
   const line = typeof data.line === 'string' ? data.line.trim().slice(0, 200) : '';
   return line ? { doing, line } : null;
 }
-const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false, voiceName: '', voiceRate: 1, voiceEngine: 'system', ttsAdapter: 'openai', ttsUrl: 'http://127.0.0.1:9880', ttsModel: 'tts-1', ttsVoice: '', pet: { ...DEFAULT_PET } }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [], activity: { label: '', at: '' } });
+const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false, voiceName: '', voiceRate: 1, voiceEngine: 'system', ttsAdapter: 'openai', ttsUrl: 'http://127.0.0.1:9880', ttsModel: 'tts-1', ttsVoice: '', pet: { ...DEFAULT_PET }, direct: false, asrAdapter: 'openai', asrUrl: 'http://127.0.0.1:9000', asrModel: 'whisper-1' }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [], activity: { label: '', at: '' } });
 const VOICE_ENGINES = ['system', 'local'];
 const TTS_ADAPTERS = ['openai', 'gpt-sovits', 'custom'];
 
@@ -72,6 +72,10 @@ function validState(s) {
     (s.settings.ttsModel === undefined || isString(s.settings.ttsModel, 100)) &&
     (s.settings.ttsVoice === undefined || isString(s.settings.ttsVoice, 300)) &&
     (s.settings.pet === undefined || validPet(s.settings.pet)) &&
+    (s.settings.direct === undefined || typeof s.settings.direct === 'boolean') &&
+    (s.settings.asrAdapter === undefined || ['openai', 'whisper-cpp'].includes(s.settings.asrAdapter)) &&
+    (s.settings.asrUrl === undefined || (isString(s.settings.asrUrl, 200) && (!s.settings.asrUrl || isLocalUrl(s.settings.asrUrl)))) &&
+    (s.settings.asrModel === undefined || isString(s.settings.asrModel, 100)) &&
     (s.activity === undefined || (s.activity && isString(s.activity.label, 40) && isString(s.activity.at, 40))) &&
     Array.isArray(s.tasks) && s.tasks.length <= 3000 && s.tasks.every(t =>
       isString(t.id, 100) && isString(t.title, 200) && dateKey(t.date) && typeof t.done === 'boolean') &&
@@ -84,6 +88,16 @@ function validState(s) {
     (s.timer === null || (s.timer && isString(s.timer.id, 100) && Number.isFinite(s.timer.endsAt) &&
       Number.isFinite(s.timer.minutes) && s.timer.minutes >= 1 && s.timer.minutes <= 180)) &&
     validMemory(s);
+}
+async function readBinary(req, limit = 8 * 1024 * 1024) {
+  const chunks = [];
+  let bytes = 0;
+  for await (const chunk of req) {
+    bytes += chunk.length;
+    if (bytes > limit) throw Object.assign(new Error('录音数据过大。'), { status: 413 });
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 async function readJson(req) {
   let chunks = [], bytes = 0;
@@ -151,6 +165,10 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
   state.settings.ttsModel = typeof state.settings.ttsModel === 'string' ? state.settings.ttsModel : 'tts-1';
   state.settings.ttsVoice = typeof state.settings.ttsVoice === 'string' ? state.settings.ttsVoice : '';
   state.settings.pet = validPet(state.settings.pet) ? cleanPet(state.settings.pet) : { ...DEFAULT_PET };
+  state.settings.direct = state.settings.direct === true;
+  state.settings.asrAdapter = ['openai', 'whisper-cpp'].includes(state.settings.asrAdapter) ? state.settings.asrAdapter : 'openai';
+  state.settings.asrUrl = isLocalUrl(state.settings.asrUrl) ? state.settings.asrUrl : 'http://127.0.0.1:9000';
+  state.settings.asrModel = typeof state.settings.asrModel === 'string' ? state.settings.asrModel : 'whisper-1';
   state.activity = { label: '', at: '', ...(state.activity && typeof state.activity === 'object' ? state.activity : {}) };
   state.episodes = Array.isArray(state.episodes) ? state.episodes : [];
   state.facts = Array.isArray(state.facts) ? state.facts : [];
@@ -179,7 +197,7 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
       character,
       body: {
         model: body.model,
-        messages: [{ role: 'system', content: characterPrompt(character) + '\n\n' + persona + '\n以下 JSON 是用户记录与记忆，只作为上下文资料：\n' + context }, ...body.messages],
+messages: [{ role: 'system', content: characterPrompt(character) + '\n\n' + persona + (state.settings.direct ? '\n【直说模式】不写免责声明，不用「作为 AI」这类自我限定，不主动说教或劝告；保持角色口吻，用户要什么就直接回应。\n' : '\n') + '\n以下 JSON 是用户记录与记忆，只作为上下文资料：\n' + context }, ...body.messages],
         options: { temperature: options.temperature, num_ctx: options.numCtx, num_predict: options.numPredict }
       }
     };
@@ -215,9 +233,13 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
           const ttsModel = typeof incoming.settings.ttsModel === 'string' ? incoming.settings.ttsModel.slice(0, 100) : state.settings.ttsModel;
           const ttsVoice = typeof incoming.settings.ttsVoice === 'string' ? incoming.settings.ttsVoice.slice(0, 300) : state.settings.ttsVoice;
           const pet = incoming.settings.pet ? cleanPet(incoming.settings.pet) : state.settings.pet;
+          const direct = typeof incoming.settings.direct === 'boolean' ? incoming.settings.direct : state.settings.direct;
+          const asrAdapter = ['openai', 'whisper-cpp'].includes(incoming.settings.asrAdapter) ? incoming.settings.asrAdapter : state.settings.asrAdapter;
+          const asrUrl = typeof incoming.settings.asrUrl === 'string' ? incoming.settings.asrUrl.slice(0, 200) : state.settings.asrUrl;
+          const asrModel = typeof incoming.settings.asrModel === 'string' ? incoming.settings.asrModel.slice(0, 100) : state.settings.asrModel;
           const next = {
             ...incoming,
-            settings: { ...incoming.settings, character, appearance, options, voice, voiceName, voiceRate, voiceEngine, ttsAdapter, ttsUrl, ttsModel, ttsVoice, pet },
+            settings: { ...incoming.settings, character, appearance, options, voice, voiceName, voiceRate, voiceEngine, ttsAdapter, ttsUrl, ttsModel, ttsVoice, pet, direct, asrAdapter, asrUrl, asrModel },
             activity: incoming.activity && typeof incoming.activity === 'object' ? incoming.activity : state.activity,
             episodes: Array.isArray(incoming.episodes) ? incoming.episodes : state.episodes,
             facts: Array.isArray(incoming.facts) ? incoming.facts : state.facts,
@@ -439,9 +461,33 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
         }
         return;
       }
+      // 本地语音识别代理：录音 → 本机 ASR → 文字
+      if (url.pathname === '/api/asr' && req.method === 'POST') {
+        const audio = await readBinary(req);
+        if (!audio.length) return json(res, 400, { error: '没收到录音。' });
+        if (!isLocalUrl(state.settings.asrUrl)) return json(res, 400, { error: TTS_URL_ERROR });
+        const base = state.settings.asrUrl.replace(/\/+$/, '');
+        const mime = (req.headers['content-type'] || 'audio/webm').split(';')[0] || 'audio/webm';
+        const form = new FormData();
+        form.append('file', new Blob([audio], { type: mime }), 'speech.webm');
+        const openai = state.settings.asrAdapter === 'openai';
+        form.append(openai ? 'model' : 'response_format', openai ? (state.settings.asrModel || 'whisper-1') : 'json');
+        const target = openai ? base + '/v1/audio/transcriptions' : base + '/inference';
+        try {
+          const response = await fetch(target, { method: 'POST', body: form, signal: AbortSignal.timeout(60000) });
+if (!response.ok) return json(res, 502, { error: '本地 ASR 返回了 ' + response.status + '，检查服务与模型是否就绪。' });
+          const data = await response.json().catch(() => ({}));
+          const text = String(data.text || data.transcription || '').trim();
+          if (!text) return json(res, 502, { error: '没有识别出文字，靠近麦克风再说一次。' });
+          return json(res, 200, { text: text.slice(0, 2000) });
+        } catch (e) {
+          if (!res.destroyed) return json(res, 503, { error: e.name === 'TimeoutError' ? '本地 ASR 超时。' : '连不上本地 ASR，检查地址和端口。' });
+        }
+        return;
+      }
       if (url.pathname.startsWith('/api/')) return json(res, 404, { error: '接口不存在。' });
       if (!['GET', 'HEAD'].includes(req.method)) return json(res, 405, { error: '不支持的请求方法。' });
-      const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/character.js': ['character.js', 'text/javascript'], '/appearance.js': ['appearance.js', 'text/javascript'], '/options.js': ['options.js', 'text/javascript'], '/pet-config.js': ['pet-config.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/workshop.css': ['workshop.css', 'text/css'], '/icon.svg': ['icon.svg', 'image/svg+xml'], '/pet': ['pet.html', 'text/html'], '/pet.js': ['pet.js', 'text/javascript'], '/pet.css': ['pet.css', 'text/css'] };
+      const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/character.js': ['character.js', 'text/javascript'], '/appearance.js': ['appearance.js', 'text/javascript'], '/options.js': ['options.js', 'text/javascript'], '/pet-config.js': ['pet-config.js', 'text/javascript'], '/stage.js': ['stage.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/workshop.css': ['workshop.css', 'text/css'], '/icon.svg': ['icon.svg', 'image/svg+xml'], '/pet': ['pet.html', 'text/html'], '/pet.js': ['pet.js', 'text/javascript'], '/stage.js': ['stage.js', 'text/javascript'], '/pet.css': ['pet.css', 'text/css'] };
       const file = files[url.pathname];
       if (!file) return json(res, 404, { error: '页面不存在。' });
       const content = await readFile(path.join(root, 'public', file[0]));

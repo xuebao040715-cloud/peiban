@@ -1,4 +1,4 @@
-import { DEFAULT_APPEARANCE, cleanAppearance } from './appearance.js?v=0.8.0';
+import { DEFAULT_APPEARANCE, cleanAppearance } from './appearance.js?v=0.9.0';
 
 const $ = id => document.getElementById(id);
 const MAX_IMAGE = 400000;

@@ -432,3 +432,63 @@ test('the companion framing no longer assumes studying', async t => {
   const client = await (await fetch(base + '/app.js')).text();
   assert.match(client, /renderNow/);
 });
+
+test('direct mode and local ASR proxy behave and validate', async t => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'peiban-stage-'));
+  const heard = [];
+  const asr = http.createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    heard.push({ url: req.url, size: body.length, type: req.headers['content-type'] });
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ text: '帮我看看这段代码' }));
+  });
+  const asrBase = await start(asr);
+  const chatSeen = [];
+  const ollama = http.createServer(async (req, res) => {
+    if (req.url === '/api/tags') { res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ models: [{ name: 'test-model' }] })); }
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    chatSeen.push(JSON.parse(body));
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ message: { role: 'assistant', content: '嗯。' } }));
+  });
+  const upstream = await start(ollama);
+  const app = await createApp({ dataDir: dir, ollamaUrl: upstream });
+  const base = await start(app);
+  t.after(async () => { await stop(app); await stop(asr); await stop(ollama); await rm(dir, { recursive: true, force: true }); });
+
+  let state = await (await fetch(base + '/api/state')).json();
+  assert.equal(state.settings.direct, false);
+  state.settings.direct = true;
+  state.settings.asrAdapter = 'openai';
+  state.settings.asrUrl = asrBase;
+  assert.equal((await putState(base, state)).status, 200);
+
+  await chat(base, { model: 'test-model', messages: [{ role: 'user', content: '在吗' }] });
+  assert.match(chatSeen.at(-1).messages[0].content, /直说模式/);
+
+  const audio = Buffer.from('fake-webm-audio');
+  let response = await fetch(base + '/api/asr', { method: 'POST', headers: { 'Content-Type': 'audio/webm' }, body: audio });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).text, '帮我看看这段代码');
+  assert.equal(heard.at(-1).url, '/v1/audio/transcriptions');
+  assert.match(heard.at(-1).type, /^multipart\/form-data/);
+
+  // 远端 ASR 地址不允许保存；空录音直接拒绝
+  const remote = { ...state, settings: { ...state.settings, asrUrl: 'https://api.example.com' } };
+  assert.equal((await putState(base, remote)).status, 400);
+  assert.equal((await fetch(base + '/api/asr', { method: 'POST', headers: { 'Content-Type': 'audio/webm' }, body: Buffer.alloc(0) })).status, 400);
+});
+
+test('the stage layer ships with pills, figure and talk button', async t => {
+  const { base } = await fixture(t);
+  const page = await (await fetch(base + '/')).text();
+  for (const id of ['stage-bar', 'pill-model', 'pill-direct', 'pill-latency', 'stage-figure', 'stage-talk']) assert.match(page, new RegExp(`id="${id}"`));
+  const stage = await fetch(base + '/stage.js');
+  assert.equal(stage.status, 200);
+  const js = await stage.text();
+  assert.match(js, /\/api\/asr/);
+  assert.match(js, /settings\.direct/);
+  assert.match(js, /chat\/stream/);
+});
