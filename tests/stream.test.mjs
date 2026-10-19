@@ -388,3 +388,47 @@ test('pet page and settings are served with the shared config', async t => {
   const broken = { ...state, settings: { ...state.settings, pet: { enabled: true, intervalMinutes: 0, size: 'medium', alwaysOnTop: true, model: '' } } };
   assert.equal((await putState(base, broken)).status, 400);
 });
+test('what the user is doing now is injected and validated', async t => {
+  const { base, captured } = await fixture(t);
+  const state = await (await fetch(base + '/api/state')).json();
+  assert.deepEqual(state.activity, { label: '', at: '' });
+
+  state.activity = { label: '写代码', at: new Date().toISOString() };
+  assert.equal((await putState(base, state)).status, 200);
+  await chat(base, { model: 'test-model', messages: [{ role: 'user', content: '在吗' }] });
+  const system = captured.at(-1).messages[0].content;
+  assert.match(system, /此刻在做什么/);
+  assert.match(system, /写代码/);
+
+  // 没说在做什么时也要有兜底，不能留空让模型瞎猜
+  const cleared = await (await fetch(base + '/api/state')).json();
+  cleared.activity = { label: '', at: '' };
+  assert.equal((await putState(base, cleared)).status, 200);
+  await chat(base, { model: 'test-model', messages: [{ role: 'user', content: '在吗' }] });
+  assert.match(captured.at(-1).messages[0].content, /没说明/);
+
+  const tooLong = { ...cleared, activity: { label: 'x'.repeat(41), at: new Date().toISOString() } };
+  assert.equal((await putState(base, tooLong)).status, 400);
+
+  // 老客户端省略 activity 时保留原值，不清空
+  const fresh = await (await fetch(base + '/api/state')).json();
+  const legacy = { ...fresh, activity: { label: '看剧', at: new Date().toISOString() } };
+  assert.equal((await putState(base, legacy)).status, 200);
+  const saved = await (await fetch(base + '/api/state')).json();
+  delete saved.activity;
+  assert.equal((await putState(base, saved)).status, 200);
+  assert.equal((await (await fetch(base + '/api/state')).json()).activity.label, '看剧');
+});
+
+test('the companion framing no longer assumes studying', async t => {
+  const { base, captured } = await fixture(t);
+  await chat(base, { model: 'test-model', messages: [{ role: 'user', content: '在打游戏' }] });
+  const system = captured.at(-1).messages[0].content;
+  assert.doesNotMatch(system, /学习伙伴|学习教练/);
+  const page = await (await fetch(base + '/')).text();
+  assert.doesNotMatch(page, /学习计划|今日小复盘|有点不想学/);
+  assert.match(page, /今天的事/);
+  assert.match(page, /id="now-chips"/);
+  const client = await (await fetch(base + '/app.js')).text();
+  assert.match(client, /renderNow/);
+});

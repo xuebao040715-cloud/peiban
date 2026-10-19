@@ -1,9 +1,10 @@
-import { DEFAULT_APPEARANCE, cleanAppearance } from './appearance.js?v=0.7.0';
+import { DEFAULT_APPEARANCE, cleanAppearance } from './appearance.js?v=0.8.0';
 
 const $ = id => document.getElementById(id);
 const MAX_IMAGE = 400000;
 let state = null, timer = null, pollTimer = null, paused = false, busy = false;
 let speakToken = 0, audioCurrent = null, audioCleanup = null, hideTimer = null;
+let lastDoing = '', nextDelay = null;
 
 const setStatus = text => { $('status').textContent = text; };
 
@@ -51,6 +52,10 @@ async function observe({ auto = false } = {}) {
     const response = await fetch('/api/pet/observe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || `请求失败（${response.status}）`);
+    const changed = Boolean(data.doing && lastDoing && data.doing !== lastDoing);
+    lastDoing = data.doing || lastDoing;
+    // 换了个场景，就早一点再看一眼，像真的在旁边留意你
+    nextDelay = changed ? 90000 : null;
     showLine(data.line, data.doing);
     setStatus(`${data.doing || '看过一眼'} · ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`);
     speak(data.line);
@@ -66,7 +71,9 @@ function schedule() {
   clearTimeout(timer);
   if (!state || paused || !state.settings.pet.enabled) return;
   const minutes = Math.min(60, Math.max(1, Number(state.settings.pet.intervalMinutes) || 5));
-  timer = setTimeout(async () => { await observe({ auto: true }); schedule(); }, minutes * 60000);
+  const wait = nextDelay ?? minutes * 60000;
+  nextDelay = null;
+  timer = setTimeout(async () => { await observe({ auto: true }); schedule(); }, wait);
 }
 
 function stopSpeaking() {

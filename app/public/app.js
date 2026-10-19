@@ -1,7 +1,7 @@
-import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.7.0';
-import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.7.0';
-import { DEFAULT_OPTIONS, cleanOptions } from './options.js?v=0.7.0';
-import { DEFAULT_PET } from './pet-config.js?v=0.7.0';
+import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.8.0';
+import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.8.0';
+import { DEFAULT_OPTIONS, cleanOptions } from './options.js?v=0.8.0';
+import { DEFAULT_PET } from './pet-config.js?v=0.8.0';
 const $ = id => document.getElementById(id);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const uid = () => crypto.randomUUID();
@@ -53,7 +53,7 @@ function setView(next) {
 }
 function greeting() {
   $('date-label').textContent = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
-  $('greeting').textContent = state.settings.nickname ? `${state.settings.nickname}，今天也一起慢慢来。` : '今天，也一起慢慢来。';
+  $('greeting').textContent = state.settings.nickname ? `${state.settings.nickname}，在呢。` : '在呢，慢慢来。';
 }
 function showMessage(m) {
   const row = el('div', `message ${m.role}`);
@@ -90,9 +90,27 @@ function renderMessages() {
   }
   scrollChat();
 }
+const ACTIVITIES = ['写代码', '工作', '学习', '打游戏', '看剧', '健身', '发呆', '休息'];
+async function setActivity(label) {
+  await mutate(s => { s.activity = { label, at: new Date().toISOString() }; });
+  if (label) notice(`知道你在${label}。她记下了，不会打扰。`);
+}
+function renderNow() {
+  const box = $('now-chips');
+  if (!box) return;
+  const current = state.activity?.label || '';
+  box.replaceChildren(...ACTIVITIES.map(label => {
+    const chip = el('button', `now-chip${label === current ? ' on' : ''}`, label);
+    chip.type = 'button';
+    chip.setAttribute('aria-pressed', String(label === current));
+    chip.addEventListener('click', () => setActivity(label === current ? '' : label).catch(() => {}));
+    return chip;
+  }));
+  $('now-strip')?.classList.toggle('has', !!current);
+}
 function taskRows(container, tasks) {
   container.replaceChildren();
-  if (!tasks.length) { container.append(el('div', 'empty', '还没有小目标。\n从一件五分钟能开始的事做起吧。')); return; }
+  if (!tasks.length) { container.append(el('div', 'empty', '还没有安排。\n想到什么就先写下来。')); return; }
   tasks.forEach(task => {
     const row = el('div', `task-row${task.done ? ' done' : ''}`);
     const check = el('input'); check.type = 'checkbox'; check.checked = task.done; check.id = `${container.id}-${task.id}`;
@@ -115,23 +133,24 @@ function stats(target, data) {
 function renderData() {
   greeting();
   const character = state.settings.character;
-  $('nav-chat-label').textContent = `和${character.name}聊聊`;
+  $('nav-chat-label').textContent = `和${character.name}待着`;
   $('companion-name').textContent = character.name;
   setAvatar($('header-avatar'),state.settings.appearance.companionAvatar,character.name);
   $('companion-subtitle').textContent = character.identity;
   $('chat-input').placeholder = `想说什么都可以，${character.name}在听…`;
+  renderNow();
   const dayTasks = state.tasks.filter(t => t.date === today());
   const complete = dayTasks.filter(t => t.done).length;
   const percent = dayTasks.length ? Math.round(complete / dayTasks.length * 100) : 0;
-  $('today-count').textContent = `已完成 ${complete} / ${dayTasks.length}`;
-  $('today-percent').textContent = `${percent}%`; $('today-progress').value = percent;
+  $('today-count').textContent = dayTasks.length ? `做了 ${complete} 件 · 还有 ${dayTasks.length - complete} 件` : '还没有安排';
+  $('today-percent').textContent = ''; $('today-progress').value = percent;
   taskRows($('today-tasks'), dayTasks);
   taskRows($('plan-tasks'), state.tasks.filter(t => t.date === $('plan-date').value));
   stats('plan-stats', [[dayTasks.length, '今天的小目标'], [complete, '今天已完成'], [state.tasks.filter(t => t.done).length, '累计完成的小事']]);
   const focus = state.records.filter(r => r.type === 'focus');
-  stats('record-stats', [[state.records.filter(r => r.type === 'note').length, '留下的心情与复盘'], [focus.reduce((n,r) => n + r.minutes, 0) + ' 分钟', '累计专注时间'], [new Set(state.records.map(r => r.date)).size + ' 天', '有记录的日子']]);
+  stats('record-stats', [[state.records.filter(r => r.type === 'note').length, '写下的片段'], [focus.reduce((n,r) => n + r.minutes, 0) + ' 分钟', '一起待过的时间'], [new Set(state.records.map(r => r.date)).size + ' 天', '有记录的日子']]);
   const records = $('record-list'); records.replaceChildren();
-  if (!state.records.length) records.append(el('div', 'empty', '这里还很安静。\n写下第一条记录，或者完成一次专注。'));
+  if (!state.records.length) records.append(el('div', 'empty', '这里还很安静。\n写一句此刻在想什么吧。'));
   state.records.slice().reverse().forEach(r => {
     const row = el('article', 'record'), meta = el('div', 'record-meta');
     meta.append(el('span','record-tag', r.type === 'focus' ? '专注时光' : '日常小记'), el('span', '', r.date));
@@ -408,7 +427,7 @@ function renderTimer() {
   const seconds = timer ? Math.max(0, Math.ceil((timer.endsAt - Date.now()) / 1000)) : selectedMinutes * 60;
   $('timer-display').textContent = `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`;
   $('timer-toggle').textContent = timer ? (seconds === 0 ? '保存专注记录' : '结束本次专注') : '开始专注 ▷';
-  $('timer-hint').textContent = timer ? '正在专注 · 关闭页面后不会发送通知' : '页面打开时，到点会在这里提醒你';
+  $('timer-hint').textContent = timer ? '正在一起待着 · 关闭页面后不会发送通知' : '页面打开时，到点会在这里提醒你';
   document.querySelectorAll('[data-minutes]').forEach(b => { b.disabled = !!timer; b.classList.toggle('selected', Number(b.dataset.minutes) === (timer?.minutes || selectedMinutes)); });
 }
 async function finishTimer() {
@@ -423,7 +442,7 @@ async function finishTimer() {
       if (!s.records.some(r => r.id === timer.id)) s.records.push({ id:timer.id, type:'focus', minutes:timer.minutes, date, at:finishedAt.toISOString(), text:`完成了 ${timer.minutes} 分钟专注。给认真开始的自己一点肯定。` });
       s.timer = null;
     });
-    notice(`这段 ${timer.minutes} 分钟的专注结束了，已经记入陪伴记录。休息一下吧。`);
+    notice(`一起待了 ${timer.minutes} 分钟，记下来了。`);
   } catch { failedTimerId = timer.id; }
   finally { timerSaving = false; }
 }

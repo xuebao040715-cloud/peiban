@@ -191,3 +191,32 @@ body .chat-panel{background:color-mix(in srgb,var(--paper) 92%,var(--soft));bord
 body .panel-heading{background:linear-gradient(180deg,#fff,color-mix(in srgb,var(--soft) 60%,#fff))}
 body #chat-form{background:color-mix(in srgb,var(--paper) 86%,var(--soft))}
 body .today-panel,body .focus-card,body .little-note{background:color-mix(in srgb,var(--paper) 93%,var(--soft))}
+/* ============================================================
+   v0.7 陪伴感：hero 重排 +「此刻」标签 + 弱化 KPI
+   （workshop.css 在 style.css 之后加载，这里统一加一级优先级）
+   ============================================================ */
+body .welcome{align-items:flex-end;padding:30px 34px 24px;min-height:226px}
+body .welcome>div:first-child{width:100%}
+body .welcome h1{font-size:31px;line-height:1.32}
+body .welcome p{margin-top:10px}
+body .welcome-tag{letter-spacing:.22em;opacity:.85}
+.now{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
+.now-label{font-size:10px;letter-spacing:.18em;color:color-mix(in srgb,var(--accent) 52%,var(--muted))}
+.now-chips{display:flex;gap:6px;flex-wrap:wrap}
+.now-chip{font:inherit;font-size:10.5px;padding:5px 10px;border-radius:999px;cursor:pointer;
+  border:1px solid color-mix(in srgb,var(--accent) 16%,#fff);background:color-mix(in srgb,#fff 86%,var(--soft));
+  color:#5f7566;transition:transform .16s,border-color .16s,background .16s,color .16s}
+.now-chip:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 42%,#fff)}
+.now-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;
+  box-shadow:0 8px 16px -9px color-mix(in srgb,var(--accent) 85%,transparent)}
+.now.has .now-label{color:var(--accent);opacity:1}
+
+/* 少一点打卡感 */
+body .today-panel .progress-info{font-size:11px;color:var(--muted);letter-spacing:.02em}
+body .today-panel #today-percent:empty{display:none}
+body .stat strong{font-size:23px}
+body .stat small{font-size:10px;letter-spacing:.05em}
+body .role-tag::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:#7bbf88;margin-right:5px;vertical-align:1px;box-shadow:0 0 0 3px rgba(123,191,136,.18)}
+body .chat-decoration{opacity:.5}
+body .chat-decoration:hover{opacity:1}

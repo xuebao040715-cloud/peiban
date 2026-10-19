@@ -38,7 +38,7 @@ function parseObservation(text) {
   const line = typeof data.line === 'string' ? data.line.trim().slice(0, 200) : '';
   return line ? { doing, line } : null;
 }
-const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false, voiceName: '', voiceRate: 1, voiceEngine: 'system', ttsAdapter: 'openai', ttsUrl: 'http://127.0.0.1:9880', ttsModel: 'tts-1', ttsVoice: '', pet: { ...DEFAULT_PET } }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [] });
+const emptyState = () => ({ version: 0, settings: { nickname: '', model: 'gemma3:12b', character: { ...DEFAULT_CHARACTER }, options: { ...DEFAULT_OPTIONS }, voice: false, voiceName: '', voiceRate: 1, voiceEngine: 'system', ttsAdapter: 'openai', ttsUrl: 'http://127.0.0.1:9880', ttsModel: 'tts-1', ttsVoice: '', pet: { ...DEFAULT_PET } }, tasks: [], messages: [], records: [], timer: null, episodes: [], facts: [], activity: { label: '', at: '' } });
 const VOICE_ENGINES = ['system', 'local'];
 const TTS_ADAPTERS = ['openai', 'gpt-sovits', 'custom'];
 
@@ -72,6 +72,7 @@ function validState(s) {
     (s.settings.ttsModel === undefined || isString(s.settings.ttsModel, 100)) &&
     (s.settings.ttsVoice === undefined || isString(s.settings.ttsVoice, 300)) &&
     (s.settings.pet === undefined || validPet(s.settings.pet)) &&
+    (s.activity === undefined || (s.activity && isString(s.activity.label, 40) && isString(s.activity.at, 40))) &&
     Array.isArray(s.tasks) && s.tasks.length <= 3000 && s.tasks.every(t =>
       isString(t.id, 100) && isString(t.title, 200) && dateKey(t.date) && typeof t.done === 'boolean') &&
     Array.isArray(s.messages) && s.messages.length <= 5000 && s.messages.every(m =>
@@ -129,6 +130,17 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
   }
   state.settings.character = state.settings.character ? cleanCharacter(state.settings.character) : { ...DEFAULT_CHARACTER };
   state.settings.appearance = state.settings.appearance ? cleanAppearance(state.settings.appearance) : { ...DEFAULT_APPEARANCE };
+  // 旧版本默认人设是“学习伙伴”，只迁移没被用户改过的默认角色。
+  const LEGACY_DEFAULT_CHARACTER = {
+    identity: '虚拟学姐与学习伙伴',
+    personality: '温和、有主见、有耐心，愿意听我聊生活，也会认真陪我解决学习中的困难。',
+    greeting: '在呢，我是知夏。今天想聊聊，还是一起开始一件小事？我都在。'
+  };
+  if (state.settings.character.id === DEFAULT_CHARACTER.id) {
+    for (const [key, legacy] of Object.entries(LEGACY_DEFAULT_CHARACTER)) {
+      if (state.settings.character[key] === legacy) state.settings.character[key] = DEFAULT_CHARACTER[key];
+    }
+  }
   state.settings.options = state.settings.options ? cleanOptions(state.settings.options) : { ...DEFAULT_OPTIONS };
   state.settings.voice = state.settings.voice === true;
   state.settings.voiceName = typeof state.settings.voiceName === 'string' ? state.settings.voiceName : '';
@@ -139,6 +151,7 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
   state.settings.ttsModel = typeof state.settings.ttsModel === 'string' ? state.settings.ttsModel : 'tts-1';
   state.settings.ttsVoice = typeof state.settings.ttsVoice === 'string' ? state.settings.ttsVoice : '';
   state.settings.pet = validPet(state.settings.pet) ? cleanPet(state.settings.pet) : { ...DEFAULT_PET };
+  state.activity = { label: '', at: '', ...(state.activity && typeof state.activity === 'object' ? state.activity : {}) };
   state.episodes = Array.isArray(state.episodes) ? state.episodes : [];
   state.facts = Array.isArray(state.facts) ? state.facts : [];
   const persona = await readFile(path.join(root, '..', 'persona', 'app-system-prompt.zh.txt'), 'utf8');
@@ -156,6 +169,7 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
       称呼: state.settings.nickname || '同学',
       本地日期: today,
       今日计划: tasks,
+      此刻在做什么: state.activity?.label || '没说明，可能在随便干点什么',
       近期记录: state.records.slice(-6).map(r => ({ 日期: r.date, 内容: r.text })),
       已知的长期事实: state.facts.slice(-20).map(f => f.text),
       最近的回忆: state.episodes.slice(-3).map(e => `${e.date}：${e.text}`)
@@ -204,6 +218,7 @@ export async function createApp({ dataDir = process.env.PEIBAN_DATA_DIR || path.
           const next = {
             ...incoming,
             settings: { ...incoming.settings, character, appearance, options, voice, voiceName, voiceRate, voiceEngine, ttsAdapter, ttsUrl, ttsModel, ttsVoice, pet },
+            activity: incoming.activity && typeof incoming.activity === 'object' ? incoming.activity : state.activity,
             episodes: Array.isArray(incoming.episodes) ? incoming.episodes : state.episodes,
             facts: Array.isArray(incoming.facts) ? incoming.facts : state.facts,
             version: state.version + 1
