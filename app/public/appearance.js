@@ -1,4 +1,4 @@
-export const DEFAULT_APPEARANCE = Object.freeze({ accent:'#52765b', backgroundColor:'#f6f7f3', backgroundImage:'', backgroundOpacity:18, companionAvatar:'', userAvatar:'' });
+export const DEFAULT_APPEARANCE = Object.freeze({ accent:'#52765b', backgroundColor:'#f6f7f3', backgroundImage:'', backgroundOpacity:18, companionAvatar:'', userAvatar:'', petImage:'' });
 export const THEMES = [
   { name:'森系绿', accent:'#52765b', backgroundColor:'#f6f7f3' },
   { name:'雾海蓝', accent:'#406d91', backgroundColor:'#f0f5fa' },
@@ -21,11 +21,11 @@ export function validImage(value, max = 1600000) {
 export function validAppearance(a) {
   return !!a && typeof a === 'object' && ['accent','backgroundColor'].every(k => /^#[0-9a-fA-F]{6}$/.test(a[k])) &&
     Number.isInteger(a.backgroundOpacity) && a.backgroundOpacity >= 0 && a.backgroundOpacity <= 60 &&
-    validImage(a.backgroundImage) && validImage(a.companionAvatar,240000) && validImage(a.userAvatar,240000);
+    validImage(a.backgroundImage) && validImage(a.companionAvatar,240000) && validImage(a.userAvatar,240000) && (a.petImage === undefined || validImage(a.petImage,400000));
 }
 export function cleanAppearance(a) {
   if (!validAppearance(a)) throw new Error('外观设置格式不正确，请重新选择颜色或图片。');
-  return Object.fromEntries(Object.keys(DEFAULT_APPEARANCE).map(k => [k,a[k]]));
+  return Object.fromEntries(Object.keys(DEFAULT_APPEARANCE).map(k => [k, a[k] ?? DEFAULT_APPEARANCE[k]]));
 }
 export function contrastText(hex) {
   const rgb = [1,3,5].map(i => { const v = parseInt(hex.slice(i,i+2),16)/255; return v <= .04045 ? v/12.92 : ((v+.055)/1.055)**2.4; });

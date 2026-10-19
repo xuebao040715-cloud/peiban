@@ -1,10 +1,13 @@
-import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.4.0';
-import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.4.0';
+import { DEFAULT_CHARACTER, CHARACTER_PRESETS, CHARACTER_LIMITS, cleanCharacter, importCharacter, exportCharacter } from './character.js?v=0.9.0';
+import { DEFAULT_APPEARANCE, THEMES, cleanAppearance, themeProperties } from './appearance.js?v=0.9.0';
+import { DEFAULT_OPTIONS, cleanOptions } from './options.js?v=0.9.0';
+import { DEFAULT_PET } from './pet-config.js?v=0.9.0';
 const $ = id => document.getElementById(id);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const uid = () => crypto.randomUUID();
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
 let state, models = [], busy = false, controller, pendingReply = null, selectedMinutes = 25, view = 'chat', timerSaving = false, currentDay = today();
+let streamText = null, streamNode = null, utterance = null, memoryBusy = false;
 let mutationQueue = Promise.resolve(), failedTimerId = null;
 let appearanceDraft, appearanceDirty = false, uploadTarget = '', imageProcessing = false;
 function setAvatar(node, source, fallback) {
@@ -23,13 +26,15 @@ async function api(url, options = {}) {
   return data;
 }
 function notice(message) { $('notice').textContent = message; $('notice').hidden = !message; }
-function mutate(change) {
+function mutate(change, { includeAppearance = false } = {}) {
   const action = mutationQueue.then(async () => {
     const draft = structuredClone(state);
     change(draft);
+    // 头像是 base64、背景图更大；没有改动外观时不要每次保存都重新上传一遍。
+    const payload = includeAppearance ? draft : { ...draft, settings: { ...draft.settings, appearance: undefined } };
     $('save-status').textContent = '正在保存…';
     try {
-      const result = await api('/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
+      const result = await api('/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       state = { ...draft, version: result.version };
       $('save-status').textContent = '已保存到本机';
       renderData();
@@ -48,7 +53,7 @@ function setView(next) {
 }
 function greeting() {
   $('date-label').textContent = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
-  $('greeting').textContent = state.settings.nickname ? `${state.settings.nickname}，今天也一起慢慢来。` : '今天，也一起慢慢来。';
+  $('greeting').textContent = state.settings.nickname ? `${state.settings.nickname}，在呢。` : '在呢，慢慢来。';
 }
 function showMessage(m) {
   const row = el('div', `message ${m.role}`);
@@ -78,14 +83,34 @@ function renderMessages() {
   const character = state.settings.character;
   if (!state.messages.some(m => (m.characterId || DEFAULT_CHARACTER.id) === character.id)) box.append(showMessage({ role:'assistant', content:character.greeting }));
   if (busy) {
-    const row = showMessage({ role:'assistant', content:`${character.name}正在想怎么回应你…` });
-    row.classList.add('thinking'); box.append(row);
+    const row = showMessage({ role:'assistant', content: streamText === null ? `${character.name}正在想怎么回应你…` : streamText });
+    row.classList.add('thinking');
+    if (streamText !== null) row.classList.add('streaming');
+    box.append(row);
   }
   scrollChat();
 }
+const ACTIVITIES = ['写代码', '工作', '学习', '打游戏', '看剧', '健身', '发呆', '休息'];
+async function setActivity(label) {
+  await mutate(s => { s.activity = { label, at: new Date().toISOString() }; });
+  if (label) notice(`知道你在${label}。她记下了，不会打扰。`);
+}
+function renderNow() {
+  const box = $('now-chips');
+  if (!box) return;
+  const current = state.activity?.label || '';
+  box.replaceChildren(...ACTIVITIES.map(label => {
+    const chip = el('button', `now-chip${label === current ? ' on' : ''}`, label);
+    chip.type = 'button';
+    chip.setAttribute('aria-pressed', String(label === current));
+    chip.addEventListener('click', () => setActivity(label === current ? '' : label).catch(() => {}));
+    return chip;
+  }));
+  $('now-strip')?.classList.toggle('has', !!current);
+}
 function taskRows(container, tasks) {
   container.replaceChildren();
-  if (!tasks.length) { container.append(el('div', 'empty', '还没有小目标。\n从一件五分钟能开始的事做起吧。')); return; }
+  if (!tasks.length) { container.append(el('div', 'empty', '还没有安排。\n想到什么就先写下来。')); return; }
   tasks.forEach(task => {
     const row = el('div', `task-row${task.done ? ' done' : ''}`);
     const check = el('input'); check.type = 'checkbox'; check.checked = task.done; check.id = `${container.id}-${task.id}`;
@@ -108,28 +133,30 @@ function stats(target, data) {
 function renderData() {
   greeting();
   const character = state.settings.character;
-  $('nav-chat-label').textContent = `和${character.name}聊聊`;
+  $('nav-chat-label').textContent = `和${character.name}待着`;
   $('companion-name').textContent = character.name;
   setAvatar($('header-avatar'),state.settings.appearance.companionAvatar,character.name);
   $('companion-subtitle').textContent = character.identity;
   $('chat-input').placeholder = `想说什么都可以，${character.name}在听…`;
+  renderNow();
   const dayTasks = state.tasks.filter(t => t.date === today());
   const complete = dayTasks.filter(t => t.done).length;
   const percent = dayTasks.length ? Math.round(complete / dayTasks.length * 100) : 0;
-  $('today-count').textContent = `已完成 ${complete} / ${dayTasks.length}`;
-  $('today-percent').textContent = `${percent}%`; $('today-progress').value = percent;
+  $('today-count').textContent = dayTasks.length ? `做了 ${complete} 件 · 还有 ${dayTasks.length - complete} 件` : '还没有安排';
+  $('today-percent').textContent = ''; $('today-progress').value = percent;
   taskRows($('today-tasks'), dayTasks);
   taskRows($('plan-tasks'), state.tasks.filter(t => t.date === $('plan-date').value));
   stats('plan-stats', [[dayTasks.length, '今天的小目标'], [complete, '今天已完成'], [state.tasks.filter(t => t.done).length, '累计完成的小事']]);
   const focus = state.records.filter(r => r.type === 'focus');
-  stats('record-stats', [[state.records.filter(r => r.type === 'note').length, '留下的心情与复盘'], [focus.reduce((n,r) => n + r.minutes, 0) + ' 分钟', '累计专注时间'], [new Set(state.records.map(r => r.date)).size + ' 天', '有记录的日子']]);
+  stats('record-stats', [[state.records.filter(r => r.type === 'note').length, '写下的片段'], [focus.reduce((n,r) => n + r.minutes, 0) + ' 分钟', '一起待过的时间'], [new Set(state.records.map(r => r.date)).size + ' 天', '有记录的日子']]);
   const records = $('record-list'); records.replaceChildren();
-  if (!state.records.length) records.append(el('div', 'empty', '这里还很安静。\n写下第一条记录，或者完成一次专注。'));
+  if (!state.records.length) records.append(el('div', 'empty', '这里还很安静。\n写一句此刻在想什么吧。'));
   state.records.slice().reverse().forEach(r => {
     const row = el('article', 'record'), meta = el('div', 'record-meta');
     meta.append(el('span','record-tag', r.type === 'focus' ? '专注时光' : '日常小记'), el('span', '', r.date));
     row.append(meta, el('p', '', r.text)); records.append(row);
   });
+  renderMemory();
   renderTimer();
 }
 async function addTask(input, date) {
@@ -148,6 +175,143 @@ function setBusy(value) {
   renderMessages();
 }
 function chatError(message) { $('chat-error').hidden = !message; $('chat-error').querySelector('span').textContent = message; }
+function paintStream() {
+  if (!streamNode || !streamNode.isConnected) {
+    renderMessages();
+    streamNode = document.querySelector('#messages .message.streaming .bubble');
+  }
+  if (streamNode) { streamNode.textContent = streamText; scrollChat(); }
+}
+let voices = [], speakQueue = [], speakTimer = null, speakToken = 0, audioCurrent = null, audioCleanup = null;
+function chineseVoices() {
+  if (!('speechSynthesis' in window)) return [];
+  const list = speechSynthesis.getVoices();
+  if (list.length) voices = list;
+  return (list.length ? list : voices).filter(v => /^zh/i.test(v.lang));
+}
+// 神经语音 > 在线 > 普通话 > 其它；本地的 SAPI 语音通常很旧，降权。
+function scoreVoice(v) {
+  let score = 0;
+  if (/natural/i.test(v.name)) score += 6;
+  if (/online/i.test(v.name)) score += 2;
+  if (/xiaoxiao|晓晓/i.test(v.name)) score += 3;
+  if (/^zh-CN$/i.test(v.lang)) score += 2;
+  if (/HK|TW|liaoning|shaanxi|Cantonese|Taiwanese|Traditional/i.test(`${v.lang} ${v.name}`)) score -= 4;
+  if (v.localService) score -= 1;
+  return score;
+}
+function resolveVoice() {
+  const list = chineseVoices();
+  if (!list.length) return null;
+  return list.find(v => v.name === state.settings.voiceName) || list.slice().sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
+}
+function toSpeechChunks(text) {
+  const plain = text.replace(/```[\s\S]*?```/g, '').replace(/[*_`#>~]/g, '')
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
+  if (!plain) return [];
+  return plain.split(/(?<=[。！？!?…；;])/).map(part => part.trim()).filter(Boolean);
+}
+function speakNext() {
+  const next = speakQueue.shift();
+  if (!next) { utterance = null; return; }
+  next.onend = () => {
+    utterance = null;
+    if (speakQueue.length) speakTimer = setTimeout(speakNext, 130);
+  };
+  next.onerror = () => { speakQueue = []; utterance = null; };
+  utterance = next;
+  speechSynthesis.speak(next);
+}
+function speak(text, { force = false } = {}) {
+  if (!force && !state.settings.voice) return;
+  stopSpeaking();
+  const chunks = toSpeechChunks(text);
+  if (!chunks.length) return;
+  if (state.settings.voiceEngine === 'local') {
+    const token = speakToken;
+    speakLocal(chunks, token).catch(error => {
+      if (token !== speakToken) return;           // 已被停止或换成另一句
+      notice(`本地 TTS 没成功（${error.message}），这一句改用系统语音。`);
+      speakSystem(chunks);
+    });
+    return;
+  }
+  speakSystem(chunks);
+}
+function speakSystem(chunks) {
+  if (!('speechSynthesis' in window)) return;
+  const voice = resolveVoice();
+  const rate = Number(state.settings.voiceRate) || 1;
+  speakQueue = chunks.map(chunk => {
+    const line = new SpeechSynthesisUtterance(chunk);
+    line.lang = voice?.lang || 'zh-CN';
+    if (voice) line.voice = voice;
+    line.rate = rate;
+    // 逐句合成，句间留一点停顿，比整段一口气念自然得多
+    return line;
+  });
+  speakNext();
+}
+async function speakLocal(chunks, token) {
+  for (const chunk of chunks) {
+    if (token !== speakToken) return;
+    const response = await fetch('/api/voice/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: chunk }) });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `TTS 返回 ${response.status}`);
+    }
+    const blob = await response.blob();
+    if (token !== speakToken) return;
+    await playAudio(blob);
+  }
+}
+function playAudio(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    const finish = () => { URL.revokeObjectURL(url); if (audioCurrent === audio) { audioCurrent = null; audioCleanup = null; } resolve(); };
+    audioCleanup = finish;
+    audio.onended = finish;
+    audio.onerror = () => { URL.revokeObjectURL(url); audioCurrent = null; audioCleanup = null; reject(new Error('音频播放失败')); };
+    audioCurrent = audio;
+    audio.play().catch(reject);
+  });
+}
+function stopSpeaking() {
+  speakToken++;
+  speakQueue = [];
+  if (speakTimer) { clearTimeout(speakTimer); speakTimer = null; }
+  if (audioCurrent) { audioCurrent.pause(); audioCleanup?.(); audioCurrent = null; audioCleanup = null; }
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  utterance = null;
+}
+function syncVoiceEngine() {
+  const local = $('voice-engine').value === 'local';
+  const localPanel = document.querySelector('.local-tts'), systemPanel = document.querySelector('.system-tts');
+  if (localPanel) localPanel.hidden = !local;
+  if (systemPanel) systemPanel.hidden = local;
+}
+function syncVoiceLabel() {
+  $('voice-rate-value').textContent = Number($('voice-rate').value).toFixed(2);
+}
+function renderVoiceOptions() {
+  const select = $('voice-select');
+  if (!select) return;
+  const list = chineseVoices();
+  const current = state.settings.voiceName || '';
+  const options = [new Option('自动（优先神经语音）', '')];
+  for (const voice of list.slice().sort((a, b) => scoreVoice(b) - scoreVoice(a))) {
+    const label = voice.name.replace(/^Microsoft\s*/, '').replace(/\s*-\s*Chinese.*$/, '').trim();
+    options.push(new Option(`${label}${voice.localService ? ' · 本地' : ' · 在线'}`, voice.name));
+  }
+  if (current && !list.some(v => v.name === current)) options.push(new Option(`${current}（系统里已找不到）`, current));
+  select.replaceChildren(...options);
+  select.value = current;
+  const hint = $('voice-hint');
+  if (hint) hint.textContent = list.length <= 1
+    ? '只检测到本地 SAPI 语音，音质较旧。用 Microsoft Edge 打开这个地址，可以解锁微软神经语音（晓晓、云希等）。'
+    : `检测到 ${list.length} 个中文语音。标「在线」的是神经语音，明显更自然。`;
+}
 async function askModel() {
   if (busy) return;
   chatError(''); setBusy(true);
@@ -157,19 +321,88 @@ async function askModel() {
       await mutate(s => s.messages.push(reply)); pendingReply = null;
     } else {
       controller = new AbortController();
+      stopSpeaking();
       const characterId = state.settings.character.id;
       const messages = state.messages.filter(m => (m.characterId || DEFAULT_CHARACTER.id) === characterId).slice(-24).map(({role,content}) => ({role,content}));
-      const reply = await api('/api/chat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ model:state.settings.model, messages, date:today(), characterId }), signal:controller.signal });
-      pendingReply = { id:uid(), role:'assistant', content:reply.content, at:new Date().toISOString(), characterId:reply.characterId, characterName:reply.characterName };
+      streamText = ''; streamNode = null;
+      // 逐字刷新会让读屏软件反复播报，流式期间先关掉实时区域，结束后再打开。
+      $('messages').setAttribute('aria-live', 'off');
+      const response = await fetch('/api/chat/stream', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ model:state.settings.model, messages, date:today(), characterId }), signal:controller.signal });
+      if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || '请求失败，请重试。'); }
+      const reader = response.body.getReader(), decoder = new TextDecoder();
+      let buffer = '', done = null;
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        let index;
+        while ((index = buffer.indexOf('\n\n')) >= 0) {
+          const frame = buffer.slice(0, index); buffer = buffer.slice(index + 2);
+          const line = frame.split('\n').find(part => part.startsWith('data: '));
+          if (!line) continue;
+          const event = JSON.parse(line.slice(6));
+          if (event.error) throw new Error(event.error);
+          if (event.delta) { streamText += event.delta; paintStream(); }
+          if (event.done) done = event;
+        }
+      }
+      const content = (done?.content ?? streamText).trim();
+      if (!content) throw new Error('模型没有返回正文，请换个模型或重新发送。');
+      pendingReply = { id:uid(), role:'assistant', content, at:new Date().toISOString(), characterId:done?.characterId || characterId, characterName:done?.characterName || state.settings.character.name };
       await mutate(s => s.messages.push(pendingReply)); pendingReply = null;
+      speak(content);
+      if (unsummarized(characterId) >= 20) remember({ silent:true }).catch(() => {});
     }
   } catch (e) { chatError(e.name === 'AbortError' ? '已停止生成。可以重试，或发送新的消息。' : e.message); }
-  finally { controller = null; setBusy(false); $('chat-input').focus(); }
+  finally { streamText = null; streamNode = null; controller = null; setBusy(false); $('messages').setAttribute('aria-live', 'polite'); $('chat-input').focus(); }
+}
+function unsummarized(characterId) {
+  const cut = state.episodes.at(-1)?.through || '';
+  return state.messages.filter(m => (m.characterId || DEFAULT_CHARACTER.id) === characterId && (m.at || '') > cut).length;
+}
+async function remember({ silent = false } = {}) {
+  if (memoryBusy) return;
+  memoryBusy = true;
+  try {
+    const characterId = state.settings.character.id;
+    const result = await api('/api/memory/summarize', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ model:state.settings.model, date:today(), characterId }) });
+    await mutate(s => {
+      if (s.episodes.some(e => e.through === result.through)) return;
+      s.episodes.push({ id:uid(), date:result.date, at:new Date().toISOString(), through:result.through, text:result.summary, characterId });
+      for (const text of result.facts) if (!s.facts.some(f => f.text === text)) s.facts.push({ id:uid(), text, at:new Date().toISOString() });
+      while (s.episodes.length > 120) s.episodes.shift();
+      while (s.facts.length > 120) s.facts.shift();
+    });
+    notice(`记住了这一段：${result.summary}`);
+  } catch (e) { if (!silent) notice(e.message); }
+  finally { memoryBusy = false; }
+}
+function renderMemory() {
+  const episodes = $('memory-episodes'), facts = $('memory-facts');
+  if (!episodes || !facts) return;
+  episodes.replaceChildren();
+  if (!state.episodes.length) episodes.append(el('div','empty','还没有回忆。聊够了之后，点上面的按钮整理一次。'));
+  state.episodes.slice().reverse().forEach(episode => {
+    const row = el('article','record'), meta = el('div','record-meta');
+    const remove = el('button','task-remove','×'); remove.type = 'button'; remove.setAttribute('aria-label','删除这段回忆');
+    remove.addEventListener('click', () => mutate(s => { s.episodes = s.episodes.filter(x => x.id !== episode.id); }).catch(() => {}));
+    meta.append(el('span','record-tag','回忆'), el('span','', episode.date), remove);
+    row.append(meta, el('p','', episode.text)); episodes.append(row);
+  });
+  facts.replaceChildren();
+  if (!state.facts.length) facts.append(el('div','empty','还没有记住任何事实。'));
+  state.facts.slice().reverse().forEach(fact => {
+    const chip = el('button','fact-chip', fact.text); chip.type = 'button'; chip.title = '点击删除这条记忆';
+    chip.addEventListener('click', () => { if (confirm(`删掉「${fact.text}」这条记忆？`)) mutate(s => { s.facts = s.facts.filter(x => x.id !== fact.id); }).catch(() => {}); });
+    facts.append(chip);
+  });
+  $('memory-count').textContent = `${state.episodes.length} 段回忆 · ${state.facts.length} 条事实`;
 }
 async function sendMessage(content) {
   content = content.trim();
   if (!content || busy) return;
   if (pendingReply) { chatError('上一条回复尚未保存，请先点击重试保存。'); return; }
+  stopSpeaking();
   setBusy(true);
   try { await mutate(s => s.messages.push({ id:uid(), role:'user', content, at:new Date().toISOString(), characterId:s.settings.character.id })); $('chat-input').value = ''; }
   catch { setBusy(false); return; }
@@ -181,7 +414,7 @@ async function connect() {
     const result = await api('/api/models'); models = result.models;
     $('connection').classList.toggle('offline', !models.length);
     $('connection-label').textContent = models.length ? '本地模型已连接' : '还没有模型';
-    $('model-hint').textContent = models.length ? '模型来自本机 Ollama，默认使用 Gemma 3 12B。' : '请先在 Ollama 下载一个模型，例如 gemma3:12b。';
+    $('model-hint').textContent = models.length ? '模型来自本机 Ollama，可在下面切换。' : '请先在 Ollama 下载一个模型，例如 gemma3:12b。';
   } catch (e) {
     models = []; $('connection').classList.add('offline'); $('connection-label').textContent = '重新连接'; $('model-hint').textContent = e.message;
   }
@@ -194,7 +427,7 @@ function renderTimer() {
   const seconds = timer ? Math.max(0, Math.ceil((timer.endsAt - Date.now()) / 1000)) : selectedMinutes * 60;
   $('timer-display').textContent = `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`;
   $('timer-toggle').textContent = timer ? (seconds === 0 ? '保存专注记录' : '结束本次专注') : '开始专注 ▷';
-  $('timer-hint').textContent = timer ? '正在专注 · 关闭页面后不会发送通知' : '页面打开时，到点会在这里提醒你';
+  $('timer-hint').textContent = timer ? '正在一起待着 · 关闭页面后不会发送通知' : '页面打开时，到点会在这里提醒你';
   document.querySelectorAll('[data-minutes]').forEach(b => { b.disabled = !!timer; b.classList.toggle('selected', Number(b.dataset.minutes) === (timer?.minutes || selectedMinutes)); });
 }
 async function finishTimer() {
@@ -209,14 +442,21 @@ async function finishTimer() {
       if (!s.records.some(r => r.id === timer.id)) s.records.push({ id:timer.id, type:'focus', minutes:timer.minutes, date, at:finishedAt.toISOString(), text:`完成了 ${timer.minutes} 分钟专注。给认真开始的自己一点肯定。` });
       s.timer = null;
     });
-    notice(`这段 ${timer.minutes} 分钟的专注结束了，已经记入陪伴记录。休息一下吧。`);
+    notice(`一起待了 ${timer.minutes} 分钟，记下来了。`);
   } catch { failedTimerId = timer.id; }
   finally { timerSaving = false; }
+}
+function syncOptions() {
+  $('temperature-value').textContent = Number($('temperature').value).toFixed(2);
+  $('numPredict-value').textContent = `${$('numPredict').value} token`;
 }
 async function init() {
   try { state = await api('/api/state'); }
   catch (e) { notice('无法载入本机记录，请重新启动陪伴后刷新。' + e.message); document.querySelectorAll('button,input,textarea').forEach(n => n.disabled = true); return; }
   state.settings.appearance ||= { ...DEFAULT_APPEARANCE };
+  state.settings.options ||= { ...DEFAULT_OPTIONS };
+  state.settings.voice = state.settings.voice === true;
+  state.episodes ||= []; state.facts ||= [];
   applyAppearance(state.settings.appearance);
   $('plan-date').value = today(); renderData(); renderMessages(); initCharacter(); initAppearance(); $('startup-status').hidden = true; await finishTimer();
   document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
@@ -226,7 +466,7 @@ async function init() {
   $('chat-form').addEventListener('submit', e => { e.preventDefault(); sendMessage($('chat-input').value); });
   $('chat-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(e.currentTarget.value); } });
   document.querySelectorAll('[data-prompt]').forEach(b => b.addEventListener('click', () => sendMessage(b.dataset.prompt)));
-  $('stop').addEventListener('click', () => controller?.abort());
+  $('stop').addEventListener('click', () => { controller?.abort(); stopSpeaking(); });
   $('retry-chat').addEventListener('click', askModel);
   $('note-form').addEventListener('submit', async e => {
     e.preventDefault(); const text = $('note-input').value.trim(); if (!text) return;
@@ -245,12 +485,43 @@ async function init() {
     try { await mutate(s => { s.timer = s.timer ? null : { id:uid(), minutes:selectedMinutes, endsAt:Date.now() + selectedMinutes * 60000 }; }); }
     catch { /* notice shown by mutate */ }
   });
-  $('settings-open').addEventListener('click', () => { $('nickname').value = state.settings.nickname; $('model').value = state.settings.model; $('settings-dialog').showModal(); });
+  $('memory-remember').addEventListener('click', () => { remember().catch(() => {}); });
+  $('settings-open').addEventListener('click', () => {
+    $('nickname').value = state.settings.nickname; $('model').value = state.settings.model;
+    $('voice').checked = !!state.settings.voice;
+    const options = state.settings.options || DEFAULT_OPTIONS;
+    $('temperature').value = options.temperature; $('numPredict').value = options.numPredict; $('numCtx').value = String(options.numCtx);
+    renderVoiceOptions();
+    $('voice-rate').value = state.settings.voiceRate || 1;
+    $('voice-engine').value = state.settings.voiceEngine || 'system';
+    $('tts-adapter').value = state.settings.ttsAdapter || 'openai';
+    $('tts-url').value = state.settings.ttsUrl || 'http://127.0.0.1:9880';
+    $('tts-voice').value = state.settings.ttsVoice || '';
+    $('tts-model').value = state.settings.ttsModel || 'tts-1';
+    const pet = state.settings.pet || DEFAULT_PET;
+    $('pet-enabled').checked = !!pet.enabled;
+    $('pet-interval').value = String(pet.intervalMinutes || 5);
+    $('pet-size').value = pet.size || 'medium';
+    $('pet-model').value = pet.model || '';
+    syncVoiceEngine();
+    syncOptions(); syncVoiceLabel();
+    $('settings-dialog').showModal();
+  });
   $('settings-close').addEventListener('click', () => $('settings-dialog').close());
+  $('temperature').addEventListener('input', syncOptions);
+  $('numPredict').addEventListener('input', syncOptions);
+  $('voice-rate').addEventListener('input', syncVoiceLabel);
+  $('voice-engine').addEventListener('change', syncVoiceEngine);
+  $('voice-test').addEventListener('click', () => speak('在呢。今天想先聊聊，还是一起开始一件小事？', { force: true }));
+  $('pet-open').addEventListener('click', () => window.open('/pet', 'peiban-pet', 'width=320,height=470'));
+  if ('speechSynthesis' in window) { speechSynthesis.addEventListener('voiceschanged', renderVoiceOptions); renderVoiceOptions(); }
   $('settings-form').addEventListener('submit', async e => {
     e.preventDefault(); const nickname = $('nickname').value.trim(), model = $('model').value;
     if (!model) { notice('请先连接 Ollama 并选择模型。'); return; }
-    try { await mutate(s => { s.settings = { ...s.settings, nickname, model }; }); $('settings-dialog').close(); renderMessages(); }
+    let options;
+    try { options = cleanOptions({ temperature:Number($('temperature').value), numPredict:Number($('numPredict').value), numCtx:Number($('numCtx').value) }); }
+    catch (error) { notice(error.message); return; }
+    try { await mutate(s => { s.settings = { ...s.settings, nickname, model, voice:$('voice').checked, voiceName:$('voice-select').value, voiceRate:Number($('voice-rate').value), voiceEngine:$('voice-engine').value, ttsAdapter:$('tts-adapter').value, ttsUrl:$('tts-url').value.trim(), ttsVoice:$('tts-voice').value.trim(), ttsModel:$('tts-model').value.trim(), pet: { enabled:$('pet-enabled').checked, intervalMinutes:Number($('pet-interval').value), size:$('pet-size').value, alwaysOnTop: s.settings.pet?.alwaysOnTop ?? true, model:$('pet-model').value.trim() }, options }; }); $('settings-dialog').close(); renderMessages(); }
     catch { /* keep dialog open */ }
   });
   $('refresh-models').addEventListener('click', connect);
@@ -338,6 +609,7 @@ function renderAppearanceEditor() {
   $('appearance-role-name').textContent = state.settings.character.name;
   ['edit-companion-avatar','appearance-companion-preview'].forEach(id => setAvatar($(id),appearanceDraft.companionAvatar,state.settings.character.name));
   ['edit-user-avatar','appearance-user-preview'].forEach(id => setAvatar($(id),appearanceDraft.userAvatar,state.settings.nickname || '我'));
+  if ($('edit-pet-image')) setAvatar($('edit-pet-image'), appearanceDraft.petImage, '伴');
   $('background-upload').classList.toggle('has-image',!!appearanceDraft.backgroundImage);
   $('background-upload').style.backgroundImage = appearanceDraft.backgroundImage ? `linear-gradient(#ffffffb8,#ffffffb8),url("${appearanceDraft.backgroundImage}")` : 'none';
   $('background-upload').setAttribute('aria-label',appearanceDraft.backgroundImage ? '更换背景图片' : '上传背景图片');
@@ -406,7 +678,7 @@ function initAppearance() {
     e.preventDefault(); const button = $('appearance-save'); if (button.disabled || imageProcessing) return;
     try {
       const appearance = cleanAppearance(appearanceDraft); button.disabled = true;
-      await mutate(s => { s.settings.appearance = appearance; });
+      await mutate(s => { s.settings.appearance = appearance; }, { includeAppearance: true });
       appearanceDirty = false; appearanceDraft = structuredClone(appearance); renderAppearanceEditor(); renderMessages(); previewCharacter(false); appearanceError('');
       notice('外观已保存，头像、背景与配色都会在下次打开时保留。');
     } catch(error) { appearanceError(error.message); }
