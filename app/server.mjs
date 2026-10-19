@@ -498,7 +498,29 @@ messages: [{ role: 'system', content: characterPrompt(character) + '\n\n' + pers
         }
         return;
       }
-      // 本地语音识别代理：录音 → 本机 ASR → 文字
+      // 桌宠窗口控制：拖动位移 / 置顶。只接受小位移，避免把窗口甩出屏幕。
+      if (url.pathname === '/api/pet/window' && req.method === 'POST') {
+        const body = await readJson(req);
+        const title = state.settings.character.name + ' · 桌宠';
+        const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, '..', 'tools', 'pet-window.ps1'), '-Title', title];
+        if (body.action === 'topmost' || body.action === 'normal') {
+          args.push(body.action === 'topmost' ? '-Topmost' : '-Normal');
+        } else {
+          const dx = Math.round(Number(body.dx) || 0);
+          const dy = Math.round(Number(body.dy) || 0);
+          if (!dx && !dy) return json(res, 400, { error: '没有位移。' });
+          if (Math.abs(dx) > 3000 || Math.abs(dy) > 3000) return json(res, 400, { error: '位移过大。' });
+          args.push('-Dx', String(dx), '-Dy', String(dy));
+        }
+        try {
+          const { stdout } = await execFileAsync('powershell.exe', args, { timeout: 8000, windowsHide: true });
+          if (String(stdout).includes('no-window')) return json(res, 404, { error: '没找到桌宠窗口，用 桌宠.cmd 重新打开。' });
+          return json(res, 200, { ok: true });
+        } catch (e) {
+          if (!res.destroyed) return json(res, 503, { error: '窗口操作失败：' + String(e.message).slice(0, 80) });
+        }
+        return;
+      }      // 本地语音识别代理：录音 → 本机 ASR → 文字
       if (url.pathname === '/api/asr' && req.method === 'POST') {
         const audio = await readBinary(req);
         if (!audio.length) return json(res, 400, { error: '没收到录音。' });
