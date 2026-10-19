@@ -27,6 +27,20 @@ function setStageAvatar(node, source, fallback) {
   }
 }
 
+const THEME_KEY = 'peiban-stage-theme';
+function currentTheme() {
+  try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
+}
+function applyTheme(theme) {
+  document.body.classList.toggle('stage-dark', theme === 'dark');
+  const pill = $('pill-theme');
+  if (pill) { pill.textContent = theme === 'dark' ? '深色' : '浅色'; pill.classList.toggle('on', theme === 'dark'); }
+}
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem(THEME_KEY, next); } catch { /* 隐身模式忽略 */ }
+  applyTheme(next);
+}
 function renderStage() {
   if (!state) return;
   const character = state.settings.character;
@@ -135,6 +149,15 @@ function stopRecording() {
 }
 
 function bind() {
+const bar = $('stage-bar');
+  if (bar && !$('pill-theme')) {
+    const pill = document.createElement('button');
+    pill.id = 'pill-theme'; pill.type = 'button'; pill.className = 'stage-pill';
+    pill.title = '切换舞台深浅';
+    pill.addEventListener('click', toggleTheme);
+    bar.append(pill);
+  }
+  applyTheme(currentTheme());
   $('pill-direct').addEventListener('click', () => toggleDirect().catch(() => {}));
   const talk = $('stage-talk');
   talk.addEventListener('pointerdown', event => { event.preventDefault(); startRecording(); });

@@ -222,84 +222,108 @@ body .chat-decoration{opacity:.5}
 body .chat-decoration:hover{opacity:1}
 /* ============================================================
    v0.9 stage view (AIRI-like): dark glass chat + character figure
-   Scoped to #view-chat so other pages keep the light theme.
+   Scoped to .stage-dark #view-chat so other pages keep the light theme.
    ============================================================ */
-#view-chat .chat-panel{
+.stage-dark #view-chat .chat-panel{
   background:linear-gradient(168deg,#111c1a 0%,#0b1412 55%,#0d1917 100%);
   border:1px solid rgba(255,255,255,.07);border-radius:20px;
   box-shadow:0 2px 0 rgba(255,255,255,.04) inset,0 30px 60px -30px rgba(0,0,0,.55)}
-#view-chat .chat-panel::before{content:"";position:absolute;inset:0;border-radius:20px;pointer-events:none;
+.stage-dark #view-chat .chat-panel::before{content:"";position:absolute;inset:0;border-radius:20px;pointer-events:none;
   background:radial-gradient(60% 40% at 80% 0%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 70%)}
-#view-chat .chat-panel{position:relative}
-#view-chat .panel-heading{background:transparent;border-bottom:1px solid rgba(255,255,255,.06)}
-#view-chat .panel-heading h2 b,#view-chat .panel-heading p{color:#e9f1ec}
-#view-chat .panel-heading p{color:rgba(233,241,236,.55)}
-#view-chat .role-tag{color:rgba(233,241,236,.55);border-color:rgba(255,255,255,.14)}
-#view-chat .messages{padding-top:18px}
-#view-chat .conversation-date{color:rgba(233,241,236,.35)}
-#view-chat .bubble{
+.stage-dark #view-chat .chat-panel{position:relative}
+.stage-dark #view-chat .panel-heading{background:transparent;border-bottom:1px solid rgba(255,255,255,.06)}
+.stage-dark #view-chat .panel-heading h2 b,.stage-dark #view-chat .panel-heading p{color:#e9f1ec}
+.stage-dark #view-chat .panel-heading p{color:rgba(233,241,236,.55)}
+.stage-dark #view-chat .role-tag{color:rgba(233,241,236,.55);border-color:rgba(255,255,255,.14)}
+.stage-dark #view-chat .messages{padding-top:18px}
+.stage-dark #view-chat .conversation-date{color:rgba(233,241,236,.35)}
+.stage-dark #view-chat .bubble{
   background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);
   color:rgba(236,244,240,.92);box-shadow:0 10px 26px -18px rgba(0,0,0,.8);backdrop-filter:blur(6px)}
-#view-chat .message.user .bubble{
+.stage-dark #view-chat .message.user .bubble{
   background:color-mix(in srgb,var(--accent) 30%,rgba(255,255,255,.04));
   border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:#f3faf5}
-#view-chat .message-name,#view-chat .message time{color:rgba(233,241,236,.42)}
-#view-chat .composer-area{background:linear-gradient(0deg,rgba(0,0,0,.35),transparent)}
-#view-chat #chat-form{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
-#view-chat #chat-form:focus-within{border-color:color-mix(in srgb,var(--accent) 55%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
-#view-chat #chat-input{color:#eef5f0;background:transparent}
-#view-chat #chat-input::placeholder{color:rgba(233,241,236,.38)}
-#view-chat .composer-bottom small,#view-chat .ai-note{color:rgba(233,241,236,.32)}
-#view-chat .quick-prompts button{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:rgba(233,241,236,.72)}
-#view-chat .quick-prompts button:hover:not(:disabled){background:rgba(255,255,255,.1);border-color:color-mix(in srgb,var(--accent) 50%,transparent)}
-#view-chat .empty,#view-chat .task-row{color:rgba(233,241,236,.55)}
+.stage-dark #view-chat .message-name,.stage-dark #view-chat .message time{color:rgba(233,241,236,.42)}
+.stage-dark #view-chat .composer-area{background:linear-gradient(0deg,rgba(0,0,0,.35),transparent)}
+.stage-dark #view-chat #chat-form{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
+.stage-dark #view-chat #chat-form:focus-within{border-color:color-mix(in srgb,var(--accent) 55%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.stage-dark #view-chat #chat-input{color:#eef5f0;background:transparent}
+.stage-dark #view-chat #chat-input::placeholder{color:rgba(233,241,236,.38)}
+.stage-dark #view-chat .composer-bottom small,.stage-dark #view-chat .ai-note{color:rgba(233,241,236,.32)}
+.stage-dark #view-chat .quick-prompts button{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:rgba(233,241,236,.72)}
+.stage-dark #view-chat .quick-prompts button:hover:not(:disabled){background:rgba(255,255,255,.1);border-color:color-mix(in srgb,var(--accent) 50%,transparent)}
+.stage-dark #view-chat .empty,.stage-dark #view-chat .task-row{color:rgba(233,241,236,.55)}
 .search-none{display:none}
 
 /* status pills */
-.stage-bar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 24px 12px;border-bottom:1px solid rgba(255,255,255,.05)}
-.stage-pill{font:inherit;font-size:10.5px;letter-spacing:.04em;padding:5px 11px;border-radius:999px;
+.stage-dark .stage-bar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 24px 12px;border-bottom:1px solid rgba(255,255,255,.05)}
+.stage-dark .stage-pill{font:inherit;font-size:10.5px;letter-spacing:.04em;padding:5px 11px;border-radius:999px;
   background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);color:rgba(233,241,236,.72)}
-.stage-pill.on{background:color-mix(in srgb,var(--accent) 34%,transparent);border-color:color-mix(in srgb,var(--accent) 55%,transparent);color:#f2fbf5}
-.stage-pill.warn{color:#f0c9a8;border-color:rgba(240,201,168,.35)}
-button.stage-pill{cursor:pointer;transition:background .16s,transform .16s}
-button.stage-pill:hover{transform:translateY(-1px);background:rgba(255,255,255,.12)}
+.stage-dark .stage-pill.on{background:color-mix(in srgb,var(--accent) 34%,transparent);border-color:color-mix(in srgb,var(--accent) 55%,transparent);color:#f2fbf5}
+.stage-dark .stage-pill.warn{color:#f0c9a8;border-color:rgba(240,201,168,.35)}
+button.stage-dark .stage-pill{cursor:pointer;transition:background .16s,transform .16s}
+.stage-dark button.stage-pill:hover{transform:translateY(-1px);background:rgba(255,255,255,.12)}
 
 /* character figure */
-.stage-figure{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;
+.stage-dark .stage-figure{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;
   padding:22px 18px 18px;overflow:hidden;
   background:linear-gradient(168deg,#111c1a,#0b1412);border:1px solid rgba(255,255,255,.07);border-radius:20px}
-.figure-glow{position:absolute;top:-40px;left:50%;transform:translateX(-50%);width:220px;height:220px;border-radius:50%;
+.stage-dark .figure-glow{position:absolute;top:-40px;left:50%;transform:translateX(-50%);width:220px;height:220px;border-radius:50%;
   background:radial-gradient(circle,color-mix(in srgb,var(--accent) 40%,transparent),transparent 68%);filter:blur(6px);
   animation:glow-breathe 6s ease-in-out infinite}
 @keyframes glow-breathe{0%,100%{opacity:.55;transform:translateX(-50%) scale(.95)}50%{opacity:1;transform:translateX(-50%) scale(1.06)}}
+.stage-dark .stage-avatar{width:96px;height:96px;font-size:38px;z-index:1;animation:float-soft 5s ease-in-out infinite}
+.stage-dark .stage-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+@keyframes float-soft{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.stage-dark .stage-figure strong{color:#eaf2ec;font-size:14px;z-index:1}
+.stage-dark .stage-state{color:rgba(233,241,236,.5);font-size:11px;min-height:15px;z-index:1}
+.stage-dark .stage-talk{margin-top:6px;z-index:1;font:inherit;font-size:11px;padding:7px 16px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:#eaf2ec;transition:.16s}
+.stage-dark .stage-talk:hover{background:rgba(255,255,255,.14)}
+.stage-dark .stage-talk.recording{background:color-mix(in srgb,var(--accent) 55%,transparent);border-color:color-mix(in srgb,var(--accent) 70%,transparent)}
+body.listening .stage-dark .stage-avatar{box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 25%,transparent)}
+@media (prefers-reduced-motion:reduce){.stage-avatar,.stage-dark .figure-glow{animation:none}}
+.stage-dark #view-chat .panel{background:linear-gradient(168deg,#111c1a,#0b1412);border-color:rgba(255,255,255,.07);
+  box-shadow:0 2px 0 rgba(255,255,255,.04) inset,0 24px 48px -28px rgba(0,0,0,.5)}
+.stage-dark #view-chat .panel h2,.stage-dark #view-chat .panel strong,.stage-dark #view-chat .stat strong{color:#eaf2ec}
+.stage-dark #view-chat .panel p,.stage-dark #view-chat .panel small,.stage-dark #view-chat .muted,.stage-dark #view-chat .stat small,.stage-dark #view-chat .field-hint{color:rgba(233,241,236,.52)}
+.stage-dark #view-chat .panel input,.stage-dark #view-chat .panel textarea{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#eef5f0}
+.stage-dark #view-chat .panel input::placeholder{color:rgba(233,241,236,.35)}
+.stage-dark #view-chat .timer-display{color:#eaf2ec}
+.stage-dark #view-chat .task-row{border-bottom-color:rgba(255,255,255,.07);color:rgba(233,241,236,.8)}
+.stage-dark #view-chat .progress-info{color:rgba(233,241,236,.5)}
+.stage-dark #view-chat progress{background:rgba(255,255,255,.12)}
+.stage-dark #view-chat progress::-webkit-progress-bar{background:rgba(255,255,255,.12)}
+.stage-dark #view-chat .little-note{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.07)}
+.stage-dark #view-chat .little-note p{color:rgba(233,241,236,.7)}
+.stage-dark #view-chat .stage-dark .stage-talk{color:#eef5f0}
+.stage-dark #view-chat .focus-card{background:linear-gradient(168deg,#111c1a,#0b1412);border:1px solid rgba(255,255,255,.07);
+  box-shadow:0 2px 0 rgba(255,255,255,.04) inset,0 24px 48px -28px rgba(0,0,0,.5)}
+.stage-dark #view-chat .focus-card h2,.stage-dark #view-chat .focus-card .timer-display{color:#eaf2ec}
+.stage-dark #view-chat .focus-card p,.stage-dark #view-chat .focus-card small{color:rgba(233,241,236,.52)}
+.stage-dark #view-chat .timer-options button{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:rgba(233,241,236,.7)}
+.stage-dark #view-chat .timer-options button.selected{background:color-mix(in srgb,var(--accent) 42%,transparent);color:#fff;border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
+/* ---------- stage: light default (dark only under body.stage-dark) ---------- */
+.stage-bar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 24px 12px;border-bottom:1px solid color-mix(in srgb,var(--line) 62%,transparent)}
+.stage-pill{font:inherit;font-size:10.5px;letter-spacing:.04em;padding:5px 11px;border-radius:999px;cursor:default;
+  background:color-mix(in srgb,#fff 72%,var(--soft));border:1px solid color-mix(in srgb,var(--accent) 14%,#fff);color:#66806f}
+.stage-pill.on{background:color-mix(in srgb,var(--accent) 15%,#fff);border-color:color-mix(in srgb,var(--accent) 34%,#fff);color:#3f5c4a}
+.stage-pill.warn{color:#a4763f;border-color:#e8d3b4}
+button.stage-pill{cursor:pointer;transition:background .16s,transform .16s,border-color .16s}
+button.stage-pill:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 42%,#fff)}
+.stage-figure{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:22px 18px 18px;overflow:hidden}
+.figure-glow{position:absolute;top:-40px;left:50%;transform:translateX(-50%);width:220px;height:220px;border-radius:50%;
+  background:radial-gradient(circle,color-mix(in srgb,var(--accent) 22%,transparent),transparent 68%);filter:blur(6px);
+  animation:glow-breathe 6s ease-in-out infinite}
+@keyframes glow-breathe{0%,100%{opacity:.5;transform:translateX(-50%) scale(.95)}50%{opacity:.95;transform:translateX(-50%) scale(1.06)}}
 .stage-avatar{width:96px;height:96px;font-size:38px;z-index:1;animation:float-soft 5s ease-in-out infinite}
 .stage-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover}
 @keyframes float-soft{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-.stage-figure strong{color:#eaf2ec;font-size:14px;z-index:1}
-.stage-state{color:rgba(233,241,236,.5);font-size:11px;min-height:15px;z-index:1}
+.stage-figure strong{font-size:14px;z-index:1;color:var(--ink)}
+.stage-state{font-size:11px;min-height:15px;z-index:1;color:var(--muted)}
 .stage-talk{margin-top:6px;z-index:1;font:inherit;font-size:11px;padding:7px 16px;border-radius:999px;cursor:pointer;
-  border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:#eaf2ec;transition:.16s}
-.stage-talk:hover{background:rgba(255,255,255,.14)}
-.stage-talk.recording{background:color-mix(in srgb,var(--accent) 55%,transparent);border-color:color-mix(in srgb,var(--accent) 70%,transparent)}
-body.listening .stage-avatar{box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 25%,transparent)}
+  border:1px solid color-mix(in srgb,var(--accent) 20%,#fff);background:#fff;color:#4a6455;transition:.16s}
+.stage-talk:hover{border-color:color-mix(in srgb,var(--accent) 40%,#fff)}
+.stage-talk.recording{background:color-mix(in srgb,var(--accent) 18%,#fff);border-color:color-mix(in srgb,var(--accent) 45%,#fff);color:#2f4a3a}
+body.listening .stage-avatar{box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 14%,transparent)}
 @media (prefers-reduced-motion:reduce){.stage-avatar,.figure-glow{animation:none}}
-#view-chat .panel{background:linear-gradient(168deg,#111c1a,#0b1412);border-color:rgba(255,255,255,.07);
-  box-shadow:0 2px 0 rgba(255,255,255,.04) inset,0 24px 48px -28px rgba(0,0,0,.5)}
-#view-chat .panel h2,#view-chat .panel strong,#view-chat .stat strong{color:#eaf2ec}
-#view-chat .panel p,#view-chat .panel small,#view-chat .muted,#view-chat .stat small,#view-chat .field-hint{color:rgba(233,241,236,.52)}
-#view-chat .panel input,#view-chat .panel textarea{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#eef5f0}
-#view-chat .panel input::placeholder{color:rgba(233,241,236,.35)}
-#view-chat .timer-display{color:#eaf2ec}
-#view-chat .task-row{border-bottom-color:rgba(255,255,255,.07);color:rgba(233,241,236,.8)}
-#view-chat .progress-info{color:rgba(233,241,236,.5)}
-#view-chat progress{background:rgba(255,255,255,.12)}
-#view-chat progress::-webkit-progress-bar{background:rgba(255,255,255,.12)}
-#view-chat .little-note{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.07)}
-#view-chat .little-note p{color:rgba(233,241,236,.7)}
-#view-chat .stage-talk{color:#eef5f0}
-#view-chat .focus-card{background:linear-gradient(168deg,#111c1a,#0b1412);border:1px solid rgba(255,255,255,.07);
-  box-shadow:0 2px 0 rgba(255,255,255,.04) inset,0 24px 48px -28px rgba(0,0,0,.5)}
-#view-chat .focus-card h2,#view-chat .focus-card .timer-display{color:#eaf2ec}
-#view-chat .focus-card p,#view-chat .focus-card small{color:rgba(233,241,236,.52)}
-#view-chat .timer-options button{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:rgba(233,241,236,.7)}
-#view-chat .timer-options button.selected{background:color-mix(in srgb,var(--accent) 42%,transparent);color:#fff;border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
