@@ -528,3 +528,12 @@ test('memory retries a facts-only pass when the model returns none', async t => 
   assert.deepEqual(draft.facts, ['用户在学 Rust', '用户习惯晚睡']);
   assert.equal(calls, 2);
 });
+test('pet window endpoint validates the move before touching the OS', async t => {
+  const { base } = await fixture(t);
+  const move = body => fetch(base + '/api/pet/window', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await move({ dx: 0, dy: 0 })).status, 400);
+  assert.equal((await move({ dx: 99999, dy: 0 })).status, 400);
+  const page = await (await fetch(base + '/pet.js')).text();
+  assert.match(page, /bindDrag/);
+  assert.match(page, /api\/pet\/window/);
+});

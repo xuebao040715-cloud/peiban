@@ -154,9 +154,42 @@ async function changeImage(file) {
   setStatus('形象已更新');
 }
 
+let dragStart = null, dragging = false;
+async function moveWindow(dx, dy, action) {
+  try {
+    await fetch('/api/pet/window', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action ? { action } : { dx, dy }) });
+  } catch { /* 移动失败不影响对话 */ }
+}
+function bindDrag() {
+  const face = $('face-button');
+  face.addEventListener('pointerdown', event => {
+    dragStart = { x: event.screenX, y: event.screenY };
+    dragging = false;
+  });
+  document.addEventListener('pointermove', event => {
+    if (!dragStart) return;
+    if (Math.abs(event.screenX - dragStart.x) + Math.abs(event.screenY - dragStart.y) > 6) dragging = true;
+  });
+  document.addEventListener('pointerup', async event => {
+    if (!dragStart) return;
+    const dx = event.screenX - dragStart.x, dy = event.screenY - dragStart.y;
+    const moved = dragging;
+    dragStart = null; dragging = false;
+    if (moved) { await moveWindow(dx, dy); return; }
+    observe().then(schedule);
+  });
+  const pin = document.createElement('button');
+  pin.id = 'pin'; pin.type = 'button'; pin.textContent = '置顶';
+  pin.addEventListener('click', async () => {
+    const on = pin.classList.toggle('on');
+    pin.textContent = on ? '取消置顶' : '置顶';
+    await moveWindow(0, 0, on ? 'topmost' : 'normal');
+  });
+  document.querySelector('.bar')?.append(pin);
+}
 function bind() {
   $('observe').addEventListener('click', () => { observe().then(schedule); });
-  $('face-button').addEventListener('click', () => { observe().then(schedule); });
+  bindDrag();
   $('pause').addEventListener('click', () => {
     paused = !paused;
     clearTimeout(timer);
